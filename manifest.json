@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Web Page Change Monitor",
+  "version": "1.6.0",
+  "minimum_chrome_version": "116",
+  "description": "Monitors selected web pages and notifies you of content changes.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "contextMenus",
+    "favicon"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["_favicon/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Web Page Change Monitor"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

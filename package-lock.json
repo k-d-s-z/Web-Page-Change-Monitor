@@ -1,0 +1,14 @@
+{
+  "name": "monitoring",
+  "version": "1.0.0",
+  "description": "Web Page Change Monitor Extension",
+  "main": "background.js",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "eslint": "^9.20.0"
+  }
+}
