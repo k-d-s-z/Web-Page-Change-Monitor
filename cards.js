@@ -95,7 +95,7 @@ function buildCard(site, flash = null) {
   }
 
   card.querySelector('.site-info').addEventListener('click', async () => {
-    chrome.tabs.create({ url: site.url });
+    chrome.tabs.create({ url: site.openUrl || site.url });
     sendToBackground({ action: 'refreshSiteContent', siteId: site.id });
     window.close();
   });

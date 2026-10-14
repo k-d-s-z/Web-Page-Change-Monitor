@@ -199,10 +199,11 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   if (!site) return;
 
   // Jeśli zmiana jest nieodczytana — otwieramy podgląd diffa zamiast samej
-  // strony, bo to właśnie po to użytkownik klika powiadomienie.
+  // strony; po zamknięciu diffa / przy odczycie otwieramy "otwieraną stronę"
+  // (site.openUrl), nie surowy URL monitorowany (może być endpointem JSON).
   const url = site.hasChanged
     ? chrome.runtime.getURL('diff.html') + '#' + site.id
-    : site.url;
+    : (site.openUrl || site.url);
 
   await chrome.tabs.create({ url });
   await refreshSiteSilently(siteId);
@@ -655,13 +656,28 @@ function sanitizeSiteInput(raw) {
   let freqIndex = parseInt(s.freqIndex, 10);
   if (!(freqIndex >= 0 && freqIndex < FREQ_MAP.length)) freqIndex = 2;
 
+  // "Otwierana strona": URL otwierany po kliknięciu karty/powiadomienia.
+  // Pozwala monitorować endpoint API (JSON/XHR), a otwierać czytelny
+  // widok dla człowieka. Puste lub nieprawidłowe -> fallback na URL
+  // monitorowany. Celowo NIE wchodzi do targetKey (nie wpływa na hasz).
+  let openUrl = String(s.openUrl || '').trim().slice(0, 2000);
+  if (openUrl) {
+    try {
+      const p = new URL(openUrl);
+      if (p.protocol !== 'http:' && p.protocol !== 'https:') openUrl = '';
+    } catch (e) {
+      openUrl = '';
+    }
+  }
+
   return {
     name,
     url,
     freqIndex,
     ignoreDates: Boolean(s.ignoreDates),
     requireCookies,
-    enableNotifications: Boolean(s.enableNotifications)
+    enableNotifications: Boolean(s.enableNotifications),
+    openUrl: openUrl || url
   };
 }
 
@@ -693,7 +709,8 @@ async function handleSaveSite(msg) {
       freqIndex: input.freqIndex,
       ignoreDates: input.ignoreDates,
       requireCookies: input.requireCookies,
-      enableNotifications: input.enableNotifications
+      enableNotifications: input.enableNotifications,
+      openUrl: input.openUrl
     };
 
     let siteId;
