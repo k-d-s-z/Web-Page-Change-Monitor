@@ -17,6 +17,14 @@ let refreshTracker = null;
 let activeSiteCount = 0;
 let summaryTimer = null;
 
+function toggleSettingsPanel(forceOpen = null) {
+  const panel = document.getElementById('settings-panel');
+  if (!panel) return;
+
+  const shouldOpen = forceOpen === null ? panel.classList.contains('hidden') : forceOpen;
+  panel.classList.toggle('hidden', !shouldOpen);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const data = await chrome.storage.local.get('language');
   currentLang = data.language || detectLanguage();
@@ -31,6 +39,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-cancel').addEventListener('click', () => showList());
   document.getElementById('btn-save').addEventListener('click', saveSite);
   document.getElementById('btn-refresh-all').addEventListener('click', refreshAll);
+  document.getElementById('btn-settings').addEventListener('click', () => toggleSettingsPanel());
+  document.getElementById('btn-close-settings').addEventListener('click', () => toggleSettingsPanel(false));
   document.getElementById('btn-backup').addEventListener('click', createBackup);
   document.getElementById('btn-restore').addEventListener('click', () => document.getElementById('restore-file-input').click());
   document.getElementById('restore-file-input').addEventListener('change', restoreBackup);
@@ -49,6 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateLangButtonsUI();
       applyTranslations();
       renderSites();
+      toggleSettingsPanel(false);
     });
   });
 
@@ -92,8 +103,10 @@ function updateRefreshAllButton() {
   if (!btn) return;
 
   const t = TRANSLATIONS[currentLang];
-  btn.textContent = isRefreshingAll ? t.btnRefreshAllBusy : t.btnRefreshAll;
+  btn.textContent = isRefreshingAll ? t.btnRefreshAllBusy : '↻';
   btn.disabled = isRefreshingAll || activeSiteCount === 0;
+  btn.title = isRefreshingAll ? t.btnRefreshAllBusy : t.btnRefreshAll;
+  btn.setAttribute('aria-label', isRefreshingAll ? t.btnRefreshAllBusy : t.btnRefreshAll);
 }
 
 function showSummary(text, kind = '', autoHideMs = 0) {
@@ -202,6 +215,7 @@ async function createBackup() {
   a.download = `monitoring-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  toggleSettingsPanel(false);
 }
 
 function skipReasonDetail(byReason, t) {
@@ -227,10 +241,6 @@ async function restoreBackup(e) {
       showSummary(t.restoreInvalid, 'warn', SUMMARY_HIDE_MS);
       return;
     }
-    // Pole "version" pojawiło się razem z pierwszym formatem eksportu, więc
-    // brak pola (starsze/ręcznie złożone pliki) traktujemy jako kompatybilne.
-    // Nieznana/nowsza wersja oznacza format, którego ten kod jeszcze nie zna
-    // — lepiej odmówić niż zgadywać, jak interpretować pola.
     if (parsed.version !== undefined && parsed.version !== SUPPORTED_BACKUP_VERSION) {
       showSummary(t.restoreUnsupportedVersion, 'warn', SUMMARY_HIDE_MS);
       return;
@@ -240,9 +250,6 @@ async function restoreBackup(e) {
       return;
     }
 
-    // Zapisujemy PRZED prośbą o uprawnienia (patrz komentarz w saveSite) —
-    // tak samo jak przy dodawaniu pojedynczej strony, żeby utrata popupu
-    // podczas natywnego dymka Chrome nie skasowała przywracanych danych.
     const res = await callBackground({ action: 'importSites', sites: parsed.sites });
 
     if (!res.ok) {
@@ -253,8 +260,6 @@ async function restoreBackup(e) {
     let permissionPending = false;
     if (res.origins && res.origins.length > 0) {
       try {
-        // Jedno, zbiorcze zapytanie o uprawnienia dla wszystkich nowych
-        // originów naraz — zamiast osobnego dymka na każdą stronę.
         const granted = await chrome.permissions.request({ origins: res.origins });
         permissionPending = !granted;
       } catch (err) {
@@ -270,10 +275,6 @@ async function restoreBackup(e) {
     if (permissionPending) text2 += ` — ${t.restorePermissionPending}`;
     showSummary(text2, permissionPending ? 'warn' : 'ok', SUMMARY_HIDE_MS * 2);
 
-    // Bez uprawnień sprawdzenie i tak zakończy się błędem sieciowym, więc
-    // odpalamy je tylko gdy dostęp faktycznie został przyznany. Nie czekamy
-    // na wynik (jak przy triggerCheck po dodaniu pojedynczej strony) — po
-    // zakończeniu wsadu po prostu odświeżamy listę, żeby pokazać wyniki.
     if (!permissionPending && Array.isArray(res.addedIds) && res.addedIds.length > 0) {
       res.addedIds.forEach((id) => checkingIds.add(id));
       renderSites();
@@ -282,6 +283,7 @@ async function restoreBackup(e) {
         renderSites();
       });
     }
+    toggleSettingsPanel(false);
   } catch (err) {
     showSummary(t.restoreInvalid, 'warn', SUMMARY_HIDE_MS);
   } finally {
@@ -296,9 +298,6 @@ async function maybeOpenPendingAdd() {
 
   await chrome.storage.local.remove('pendingAdd');
 
-  // Wpis starszy niż 10 minut ignorujemy — np. gdy użytkownik kliknął w menu
-  // kontekstowe, ale otworzył popup dopiero dużo później; nie chcemy, żeby
-  // formularz "wyskoczył" ze starym, zaskakującym URL-em.
   if (Date.now() - (pending.ts || 0) > PENDING_ADD_MAX_AGE_MS) return;
 
   let suggestedName = '';
@@ -352,8 +351,6 @@ function showForm(site = null, prefill = null) {
   }
 
   if (prefill) {
-    // Nazwa jest tylko podpowiedzią z nazwy hosta — to najbardziej
-    // prawdopodobne miejsce, które użytkownik zechce poprawić przed zapisem.
     const nameField = document.getElementById('site-name');
     nameField.focus();
     nameField.select();
@@ -405,27 +402,17 @@ async function saveSite() {
     return;
   }
 
-  // TWARDA BLOKADA BEZPIECZEŃSTWA: http:// + ciasteczka sesyjne
   if (urlObj.protocol === 'http:' && requireCookies) {
     showFormMessage(t.errHttpCookiesBlocked);
     return;
   }
 
-  // OSTRZEŻENIE: Zwykłe http:// bez ciasteczek (wymaga dwukrotnego kliknięcia Zapisz)
   if (urlObj.protocol === 'http:' && pendingHttpConfirm !== url) {
     pendingHttpConfirm = url;
     showFormMessage(t.warnHttp, 'warn');
     return;
   }
 
-  // Zapisujemy stronę PRZED prośbą o uprawnienia. chrome.permissions.request()
-  // pokazuje natywny dymek Chrome, który kradnie fokus oknu popupu — a popup
-  // akcji rozszerzenia zamyka się automatycznie przy utracie fokusu, ubijając
-  // w locie zawieszoną funkcję saveSite razem z resztą kodu po await. Jeśli
-  // najpierw zapiszemy dane (samo storage.local nie wymaga host_permissions,
-  // więc nie pokazuje żadnego UI i nie zamyka popupu), utrata popupu podczas
-  // dymka uprawnień przestaje gubić dane — w najgorszym razie trzeba będzie
-  // później nadać uprawnienie ręcznie przy edycji.
   const res = await callBackground({
     action: 'saveSite',
     site: { id, name, url, freqIndex, ignoreDates, requireCookies, enableNotifications }
@@ -442,9 +429,6 @@ async function saveSite() {
     });
 
     if (!granted) {
-      // Nowo dodana strona bez uprawnień jest bezużyteczna (nigdy się nie
-      // sprawdzi) — wycofujemy wpis, żeby nie zostawiać martwej pozycji.
-      // Przy edycji istniejącej strony zostawiamy ją (dane wcześniej działały).
       if (!id) await callBackground({ action: 'deleteSite', siteId: res.siteId });
       showFormMessage(t.alertPermissionReq);
       return;
