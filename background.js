@@ -5,6 +5,7 @@ const MAX_SITES = 50;
 const CHECK_ALL_CONCURRENCY = 3;
 const NOTIFICATION_PREFIX = 'change_';
 const HASH_MODE = 'v4';
+const SNAPSHOT_MAX_CHARS = 150000;
 
 let storageQueue = Promise.resolve();
 function withStorageLock(task) {
@@ -16,13 +17,11 @@ function withStorageLock(task) {
 const inFlight = new Set();
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('[Monitor] Extension installed/updated.');
   await setupAlarms();
   await updateContextMenu();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  console.log('[Monitor] Browser startup.');
   inFlight.clear();
   await setupAlarms();
   await updateContextMenu();
@@ -119,7 +118,15 @@ const HANDLERS = {
     if (msg.siteId) await refreshSiteSilently(String(msg.siteId));
     return { status: 'ok' };
   },
-  checkNow: async (msg) => (msg.siteId ? checkSite(String(msg.siteId)) : { status: 'skipped' }),
+  // Pojedynczy check: aktualizujemy badge od razu, bo użytkownik patrzy
+  // na wynik tej konkretnej strony. W batchu (checkAll/checkSites) badge
+  // liczony jest raz na końcu — patrz runBatch().
+  checkNow: async (msg) => {
+    if (!msg.siteId) return { status: 'skipped' };
+    const result = await checkSite(String(msg.siteId));
+    if (result.status !== 'busy') await updateBadge();
+    return result;
+  },
   checkSites: async (msg) => checkSpecificSites(msg.siteIds),
   saveSite: (msg) => handleSaveSite(msg),
   toggleSite: (msg) => handleToggleSite(msg),
@@ -183,13 +190,16 @@ async function setupAlarms() {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name.startsWith('check_')) {
     const siteId = alarm.name.replace('check_', '');
-    await checkSite(siteId);
+    const result = await checkSite(siteId);
+    // Badge aktualizujemy tylko wtedy, gdy check faktycznie się wykonał
+    // (status 'busy' = inny check tej strony już leci).
+    if (result.status !== 'busy') await updateBadge();
   }
 });
 
 chrome.notifications.onClicked.addListener(async (notificationId) => {
   if (!notificationId.startsWith(NOTIFICATION_PREFIX)) return;
-  
+
   const parts = notificationId.slice(NOTIFICATION_PREFIX.length).split('_');
   const siteId = parts[0];
 
@@ -198,7 +208,13 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   const site = (data.sites || []).find((s) => s.id === siteId);
   if (!site) return;
 
-  await chrome.tabs.create({ url: site.url });
+  // Jeśli zmiana jest nieodczytana — otwieramy podgląd diffa zamiast samej
+  // strony, bo to właśnie po to użytkownik klika powiadomienie.
+  const url = site.hasChanged
+    ? chrome.runtime.getURL('diff.html') + '#' + site.id
+    : site.url;
+
+  await chrome.tabs.create({ url });
   await refreshSiteSilently(siteId);
 });
 
@@ -212,7 +228,6 @@ function detectLanguage() {
 
 function cleanHtmlSimple(htmlText) {
   if (!htmlText) return '';
-
   let cleaned = htmlText.replace(/<!--[\s\S]*?-->/g, '');
   cleaned = cleaned.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '');
   cleaned = cleaned.replace(/<[^>]+>/g, ' ');
@@ -220,15 +235,39 @@ function cleanHtmlSimple(htmlText) {
   return cleaned.replace(/\s+/g, ' ').trim();
 }
 
+// Wersja do PODGLĄDU ZMIAN (U1): w przeciwieństwie do cleanHtmlSimple
+// zachowuje strukturę linii — tagi blokowe stają się separatorami \n.
+// Dzięki temu diff porównuje akapity/komórki jako linie, a nie jeden
+// zwinięty ciąg tekstu. Snapshot jest trzymany ODRĘBNIE od hasha
+// (lastHash liczony jest nadal z cleanHtmlSimple, więc baseline się
+// nie psuje przy aktualizacji rozszerzenia).
+const SNAPSHOT_BLOCK_TAGS = 'p|div|br|li|tr|td|th|section|article|header|footer|nav|aside|h[1-6]|blockquote|ul|ol|table|figure|figcaption|dt|dd|hr|form|main';
+
+function cleanHtmlStructured(htmlText) {
+  if (!htmlText) return '';
+  let cleaned = htmlText.replace(/<!--[\s\S]*?-->/g, '');
+  cleaned = cleaned.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '');
+  cleaned = cleaned.replace(new RegExp(`<(${SNAPSHOT_BLOCK_TAGS})[^>]*>`, 'gi'), '\n');
+  cleaned = cleaned.replace(/<[^>]+>/g, ' ');
+  cleaned = cleaned.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
+  return cleaned
+    .split('\n')
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, SNAPSHOT_MAX_CHARS)
+    .trim();
+}
+
 function filterOutDatesAndTimes(text) {
   if (!text) return '';
   let out = text;
-  
+
   out = out.replace(/\b\d{1,2}:\d{2}(:\d{2})?(\s*([AP]\.?M\.?))?\b/gi, ' ');
   out = out.replace(/\b\d{4}[-/. ]\d{1,2}[-/. ]\d{1,2}\b/g, ' ');
   out = out.replace(/\b\d{1,2}[-/. ]\d{1,2}[-/. ]\d{2,4}\b/g, ' ');
   // Pelne wsparcie dla polskich znakow i nazewnictwa Unicode
-  out = out.replace(/\b(\d{1,2}\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Sty|Lut|Mar|Kwi|Maj|Cze|Lip|Sie|Wrz|Pa\u017A|Paz|Lis|Gru)[\p{L}]*(\s+\d{2,4})?\b/giu, ' ');
+  out = out.replace(/\b(\d{1,2}\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Sty|Lut|Mar|Kwi|Maj|Cze|Lip|Sie|Wrz|Pa\u017A|Paz|Lis|Gru)[\p{L}]*((\s+\d{2,4})|\b(\s+\d{2,4})?)/giu, ' ');
 
   return out.replace(/\s+/g, ' ').trim();
 }
@@ -310,10 +349,7 @@ async function fetchHtml(url, requireCookies, signal, conditional) {
   };
 
   // Warunkowe żądanie (ETag / Last-Modified): jeśli serwer to wspiera i
-  // potwierdzi brak zmian odpowiedzią 304, oszczędzamy transfer i czas —
-  // nie trzeba ściągać ani haszować treści. To tylko szybka ścieżka: gdy
-  // serwer nie wysyła tych nagłówków (większość prostych stron), zawsze
-  // dostaniemy zwykłe 200 i wracamy do dotychczasowego porównania hashy.
+  // potwierdzi brak zmian odpowiedzią 304, oszczędzamy transfer i czas.
   if (conditional && conditional.etag) headers['If-None-Match'] = conditional.etag;
   if (conditional && conditional.lastModified) headers['If-Modified-Since'] = conditional.lastModified;
 
@@ -354,7 +390,7 @@ function normalizeContent(htmlText, ignoreDates) {
 async function notifyChange(site, lang) {
   const notifTitle = lang === 'pl' ? 'Zmiana wykryta!' : 'Change detected!';
   const notifMsg = lang === 'pl'
-    ? `Strona "${site.name}" zosta\u0142a zaktualizowana.`
+    ? `Strona "${site.name}" została zaktualizowana.`
     : `Web page "${site.name}" has been updated.`;
 
   const uniqueNotifId = `${NOTIFICATION_PREFIX}${site.id}_${Date.now()}`;
@@ -382,6 +418,13 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
       status = cur.lastHash === newHash ? 'unchanged' : 'changed';
     }
 
+    // U1: przy wykrytej zmianie przesuwamy dotychczasowy lastSnapshot do
+    // prevSnapshot — diff.html porówna te dwie wersje. Przy 'unchanged'
+    // po prostu odświeżamy bieżący snapshot (treść jest identyczna lub
+    // zmieniła się tylko w sposobie renderowania, a hasz odpowiada).
+    const snapshotText = (fetchResult && fetchResult.snapshotText) || '';
+    const changed = status === 'changed';
+
     sites[idx] = {
       ...cur,
       lastHash: newHash,
@@ -391,7 +434,10 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
       lastCheckTime: Date.now(),
       lastAttemptTime: Date.now(),
       lastError: null,
-      hasChanged: cur.hasChanged || status === 'changed'
+      hasChanged: cur.hasChanged || changed,
+      prevSnapshot: changed ? (cur.lastSnapshot || cur.prevSnapshot || '') : (cur.prevSnapshot || ''),
+      lastSnapshot: snapshotText,
+      changedAt: changed ? Date.now() : (cur.changedAt || null)
     };
     await chrome.storage.local.set({ sites });
     return { status, site: sites[idx] };
@@ -399,9 +445,8 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
 }
 
 // Serwer potwierdził odpowiedzią 304, że treść się nie zmieniła — nie było
-// więc czego haszować. Status jest więc zawsze "unchanged"; odświeżamy
-// tylko znaczniki czasu i (jeśli serwer je odesłał) świeże wartości
-// ETag/Last-Modified.
+// więc czego haszować ani snapshotować. Odświeżamy tylko znaczniki czasu
+// i (jeśli serwer je odesłał) świeże wartości ETag/Last-Modified.
 function commitNotModified(siteId, expected, fetchResult) {
   return withStorageLock(async () => {
     const data = await chrome.storage.local.get('sites');
@@ -456,6 +501,12 @@ async function runCheck(siteId) {
 
     const fetchResult = await fetchHtml(site.url, site.requireCookies, controller.signal, conditional);
 
+    // Snapshot do podglądu zmian (U1) — liczony tylko przy pełnym pobraniu;
+    // przy 304 treść jest z definicji niezmieniona, snapshot zostaje stary.
+    if (!fetchResult.notModified) {
+      fetchResult.snapshotText = cleanHtmlStructured(fetchResult.text);
+    }
+
     let result;
     if (fetchResult.notModified) {
       result = await commitNotModified(siteId, site, fetchResult);
@@ -468,9 +519,8 @@ async function runCheck(siteId) {
     if (!result) return { status: 'skipped' };
 
     if (result.status === 'changed' && result.site.enableNotifications !== false) {
-      // Awaitowane dla spójności ze stylem async/await w tym pliku, ale w
-      // osobnym try/catch: błąd samego API powiadomień nie powinien zamieniać
-      // poprawnie wykrytej zmiany w status "error" całego sprawdzenia.
+      // Błąd samego API powiadomień nie powinien zamieniać poprawnie
+      // wykrytej zmiany w status "error" całego sprawdzenia.
       try {
         await notifyChange(site, lang);
       } catch (notifyErr) {
@@ -478,7 +528,9 @@ async function runCheck(siteId) {
       }
     }
 
-    await updateBadge();
+    // Badge celowo NIE jest tu aktualizowany — robi to wywołujący
+    // (checkNow / alarm / runBatch), żeby batch nie robił 50 zbędnych
+    // odczytów storage.
     return { status: result.status };
   } catch (error) {
     const message = error && error.name === 'AbortError'
@@ -515,6 +567,9 @@ async function runBatch(ids) {
     }
   };
   await Promise.all(Array.from({ length: Math.min(CHECK_ALL_CONCURRENCY, ids.length) }, worker));
+
+  // Badge raz na cały batch, a nie po każdym checku.
+  await updateBadge();
   return summary;
 }
 
@@ -590,6 +645,12 @@ async function releaseUnusedOrigins(urls) {
       console.warn('[Monitor] Could not remove permission', pattern, e);
     }
   }
+}
+
+function newSiteId() {
+  // crypto.randomUUID() zamiast Date.now()+random: brak kolizji nawet przy
+  // imporcie wielu stron w tej samej milisekundzie.
+  return crypto.randomUUID();
 }
 
 function sanitizeSiteInput(raw) {
@@ -673,13 +734,16 @@ async function handleSaveSite(msg) {
           lastModified: null,
           lastCheckTime: null,
           lastError: null,
-          hasChanged: false
+          hasChanged: false,
+          prevSnapshot: '',
+          lastSnapshot: '',
+          changedAt: null
         });
         needsBaseline = !cur.isPaused;
       }
       siteId = cur.id;
     } else {
-      siteId = Date.now().toString() + Math.floor(Math.random() * 1000);
+      siteId = newSiteId();
       sites.push({
         id: siteId,
         ...fields,
@@ -690,7 +754,10 @@ async function handleSaveSite(msg) {
         etag: null,
         lastModified: null,
         lastError: null,
-        lastCheckTime: null
+        lastCheckTime: null,
+        prevSnapshot: '',
+        lastSnapshot: '',
+        changedAt: null
       });
       needsBaseline = true;
     }
@@ -736,7 +803,7 @@ async function handleImportSites(msg) {
       if (seen.has(identity)) { skippedByReason.duplicate++; continue; }
       seen.add(identity);
 
-      const siteId = Date.now().toString() + Math.floor(Math.random() * 1000);
+      const siteId = newSiteId();
       sites.push({
         id: siteId,
         ...input,
@@ -747,7 +814,10 @@ async function handleImportSites(msg) {
         etag: null,
         lastModified: null,
         lastError: null,
-        lastCheckTime: null
+        lastCheckTime: null,
+        prevSnapshot: '',
+        lastSnapshot: '',
+        changedAt: null
       });
 
       let urlObj;

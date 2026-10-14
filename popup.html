@@ -270,6 +270,19 @@
     .meta-flash.warn {
       color: #FBBF24;
     }
+    .link-diff {
+      color: #A78BFA;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .link-diff:hover {
+      color: #C4B5FD;
+      text-decoration: underline;
+    }
+    .link-diff:focus-visible {
+      outline: 2px solid #8B5CF6;
+      outline-offset: 1px;
+    }
     .actions {
       display: flex;
       gap: 3px;
@@ -361,6 +374,24 @@
       margin-left: 4px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+    }
+    .badge-paused {
+      background: #374151;
+      color: #D1D5DB;
+      font-size: 8px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      margin-left: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 24px 8px;
+      color: #6B7280;
+      font-size: 12px;
+      line-height: 1.6;
     }
     .form-group {
       margin-bottom: 10px;

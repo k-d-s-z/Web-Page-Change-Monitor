@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Web Page Change Monitor",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "minimum_chrome_version": "116",
   "description": "Monitors selected web pages and notifies you of content changes.",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "alarms",
     "notifications",
     "contextMenus",
@@ -14,6 +15,9 @@
   "optional_host_permissions": [
     "<all_urls>"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "web_accessible_resources": [
     {
       "resources": ["_favicon/*"],

@@ -38,6 +38,7 @@ function buildCard(site, flash = null) {
   card.tabIndex = 0;
 
   const labelFreq = t.freqLabels[site.freqIndex] || t.freqLabels[0];
+  const pausedBadge = site.isPaused ? `<span class="badge-paused">${t.badgePaused}</span>` : '';
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
   const lastCheck = site.lastCheckTime ? formatLastCheck(site.lastCheckTime) : '&mdash;';
 
@@ -47,6 +48,10 @@ function buildCard(site, flash = null) {
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
     : '';
+  // U1: link do podglądu zmian — widoczny tylko, gdy jest co pokazać.
+  const diffHtml = site.hasChanged && site.prevSnapshot
+    ? ` &bull; <a href="#" class="link-diff" title="${t.titleDiff}">${t.linkDiff}</a>`
+    : '';
 
   const isChecking = checkingIds.has(site.id);
   const refreshDisabled = site.isPaused || isChecking;
@@ -54,8 +59,8 @@ function buildCard(site, flash = null) {
   card.innerHTML = `
     <button type="button" class="drag-handle" title="${t.titleDrag}" aria-label="${t.titleDrag}"><svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="3.5" r="1.7"/><circle cx="10" cy="3.5" r="1.7"/><circle cx="4" cy="9" r="1.7"/><circle cx="10" cy="9" r="1.7"/><circle cx="4" cy="14.5" r="1.7"/><circle cx="10" cy="14.5" r="1.7"/></svg></button>
     <div class="site-info">
-      <div class="site-name"><img class="site-favicon" src="${faviconUrl(site.url, 32)}" width="14" height="14" alt="" aria-hidden="true">${escapeHtml(site.name)}${badgeHtml}</div>
-      <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${errorHtml}${flashHtml}</div>
+      <div class="site-name"><img class="site-favicon" src="${faviconUrl(site.url, 32)}" width="14" height="14" alt="" aria-hidden="true">${escapeHtml(site.name)}${pausedBadge}${badgeHtml}</div>
+      <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${errorHtml}${flashHtml}${diffHtml}</div>
     </div>
     <div class="actions">
       <button class="btn-icon btn-refresh${isChecking ? ' spinning' : ''}" title="${t.titleRefresh}" aria-label="${t.titleRefresh}"${refreshDisabled ? ' disabled' : ''}><span class="icon">&#x1F504;</span></button>
@@ -101,6 +106,15 @@ function buildCard(site, flash = null) {
   card.querySelector('.btn-delete').addEventListener('click', (e) => {
     e.stopPropagation();
     enterDeleteConfirm(card, site);
+  });
+
+  const diffEl = card.querySelector('.link-diff');
+  if (diffEl) diffEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL('diff.html') + '#' + site.id });
+    sendToBackground({ action: 'refreshSiteContent', siteId: site.id });
+    window.close();
   });
 
   card.addEventListener('keydown', onCardKeyDown);
@@ -162,9 +176,22 @@ async function renderSites() {
   const data = await chrome.storage.local.get('sites');
   const sites = data.sites || [];
 
-  container.replaceChildren(...sites.map((site) => buildCard(site)));
   document.getElementById('site-count-badge').textContent = `(${sites.length}/${MAX_SITES})`;
-  
+
+  // Pusty stan (U6): zamiast pustego kontenera — wyraźne CTA.
+  if (sites.length === 0) {
+    const emptyEl = document.createElement('div');
+    emptyEl.className = 'empty-state';
+    emptyEl.textContent = TRANSLATIONS[currentLang].emptyState;
+    container.replaceChildren(emptyEl);
+    activeSiteCount = 0;
+    updateRefreshAllButton();
+    sendToBackground({ action: 'updateBadge' });
+    return;
+  }
+
+  container.replaceChildren(...sites.map((site) => buildCard(site)));
+
   activeSiteCount = sites.filter((s) => !s.isPaused).length;
   updateRefreshAllButton();
 
