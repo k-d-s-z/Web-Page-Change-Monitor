@@ -4,46 +4,196 @@
   <meta charset="UTF-8">
   <title>Change details — Web Page Change Monitor</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 860px;
-      margin: 24px auto;
-      padding: 0 16px;
-      color: #F3F4F6;
-      background: #09090E;
+    :root {
+      color-scheme: dark;
+      --bg: #09090E;
+      --panel: #121318;
+      --panel-2: #18181F;
+      --panel-3: #1F1F28;
+      --border: #2B2B36;
+      --muted: #9CA3AF;
+      --text: #F3F4F6;
+      --accent: #A78BFA;
+      --accent-strong: #8B5CF6;
+      --success-bg: rgba(34, 197, 94, 0.18);
+      --danger-bg: rgba(248, 113, 113, 0.18);
+      --removed-bg: rgba(248, 113, 113, 0.12);
+      --added-bg: rgba(34, 197, 94, 0.12);
+      --shadow: rgba(0, 0, 0, 0.26);
     }
-    h1 { font-size: 18px; margin-bottom: 4px; }
-    .meta { color: #9CA3AF; font-size: 12px; margin-bottom: 12px; }
-    a { color: #A78BFA; }
-    .diff {
-      white-space: pre-wrap;
-      line-height: 1.7;
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(139, 92, 246, 0.08), transparent 30%),
+        var(--bg);
+    }
+
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.3rem, 3vw, 1.9rem);
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+      color: #FFFFFF;
+    }
+
+    .meta {
+      color: var(--muted);
       font-size: 13px;
-      background: #18181F;
-      border: 1px solid #2B2B36;
-      border-radius: 8px;
-      padding: 14px;
+      margin-top: 8px;
+      line-height: 1.5;
       word-break: break-word;
     }
-    ins {
-      background: rgba(34, 197, 94, 0.22);
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    a {
+      color: var(--accent);
       text-decoration: none;
-      border-radius: 3px;
-      padding: 0 2px;
+      font-weight: 600;
     }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .diff {
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.0));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 12px 32px var(--shadow);
+      padding: 14px 14px 10px;
+      min-height: 180px;
+      font-size: 15px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .diff-line {
+      display: block;
+      padding: 3px 8px 3px 10px;
+      margin: 0 -8px;
+      border-radius: 6px;
+      color: var(--text);
+      min-height: 1.7em;
+    }
+
+    .diff-line.equivalent {
+      color: rgba(243, 244, 246, 0.85);
+      opacity: 0.8;
+    }
+
+    .diff-line.changed {
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 3px solid rgba(167, 139, 250, 0.7);
+    }
+
+    .diff-line.added {
+      background: var(--added-bg);
+      border-left: 3px solid rgba(34, 197, 94, 0.9);
+    }
+
+    .diff-line.removed {
+      background: var(--removed-bg);
+      border-left: 3px solid rgba(248, 113, 113, 0.9);
+    }
+
+    .diff-line.empty {
+      color: transparent;
+      background: transparent;
+      border-left-color: transparent;
+    }
+
+    ins, del {
+      display: inline;
+      text-decoration: none;
+      border-radius: 4px;
+      padding: 0 2px;
+      box-decoration: inset 0 0 0 1px rgba(255,255,255,0.08);
+    }
+
+    ins {
+      background: var(--success-bg);
+      color: #DCFCE7;
+    }
+
     del {
-      background: rgba(248, 113, 113, 0.22);
-      border-radius: 3px;
-      padding: 0 2px;
+      background: var(--danger-bg);
+      color: #FECACA;
     }
-    .empty { color: #9CA3AF; font-style: italic; }
+
+    .empty {
+      display: inline-block;
+      color: var(--muted);
+      font-style: italic;
+      line-height: 1.7;
+      padding: 8px 6px;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .toolbar {
+        width: 100%;
+      }
+
+      .diff {
+        font-size: 14px;
+        padding: 12px 10px 8px;
+      }
+
+      .diff-line {
+        margin: 0 -4px;
+        padding-left: 8px;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1 id="title"></h1>
-  <div class="meta" id="meta"></div>
-  <p><a id="open" href="#" target="_blank" rel="noopener">Open page ↗</a></p>
-  <div class="diff" id="diff"></div>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1 id="title"></h1>
+        <div class="meta" id="meta"></div>
+      </div>
+      <div class="toolbar">
+        <a id="open" href="#" target="_blank" rel="noopener">Open page ↗</a>
+      </div>
+    </div>
+
+    <div class="diff" id="diff"></div>
+  </div>
+
   <script src="diff.js"></script>
 </body>
 </html>
