@@ -52,9 +52,7 @@ async function updateContextMenu() {
           id: CONTEXT_MENU_MONITOR_ID,
           title: contextMenuTitle(lang),
           contexts: ['page'],
-          // Ukrywa pozycję na stronach chrome://, plikach lokalnych itp.,
-          // dla których i tak nie da się dodać monitorowania (wymóg http/https
-          // egzekwowany też w sanitizeSiteInput).
+          // Ukrywa pozycję na stronach chrome://, plikach lokalnych itp.
           documentUrlPatterns: ['http://*/*', 'https://*/*']
         },
         () => {
@@ -72,8 +70,7 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
   if (info.menuItemId !== CONTEXT_MENU_MONITOR_ID || !info.pageUrl) return;
 
   // Zapisujemy tylko URL (z timestampem do wygaszenia po czasie) — nazwę
-  // strony popup zaproponuje sam na podstawie hosta, bez potrzeby
-  // uprawnienia "tabs" tylko po to, by odczytać tytuł karty.
+  // strony popup zaproponuje sam na podstawie hosta.
   await chrome.storage.local.set({ pendingAdd: { url: info.pageUrl, ts: Date.now() } });
 
   let opened = false;
@@ -87,11 +84,6 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
   }
 
   if (!opened) {
-    // action.openPopup() jest ogólnie dostępne dopiero od Chrome 127
-    // (wcześniej tylko dla rozszerzeń wdrażanych przez politykę). Na
-    // starszych wersjach informujemy użytkownika, żeby kliknął ikonę —
-    // formularz i tak otworzy się od razu wypełniony, bo pendingAdd
-    // zostaje w storage.
     const data = await chrome.storage.local.get('language');
     const lang = data.language || detectLanguage();
     chrome.notifications.create(`pendingadd_${Date.now()}`, {
@@ -119,8 +111,8 @@ const HANDLERS = {
     return { status: 'ok' };
   },
   // Pojedynczy check: aktualizujemy badge od razu, bo użytkownik patrzy
-  // na wynik tej konkretnej strony. W batchu (checkAll/checkSites) badge
-  // liczony jest raz na końcu — patrz runBatch().
+  // na wynik tej konkretnej strony. W batchu badge liczony jest raz na
+  // końcu — patrz runBatch().
   checkNow: async (msg) => {
     if (!msg.siteId) return { status: 'skipped' };
     const result = await checkSite(String(msg.siteId));
@@ -191,8 +183,6 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name.startsWith('check_')) {
     const siteId = alarm.name.replace('check_', '');
     const result = await checkSite(siteId);
-    // Badge aktualizujemy tylko wtedy, gdy check faktycznie się wykonał
-    // (status 'busy' = inny check tej strony już leci).
     if (result.status !== 'busy') await updateBadge();
   }
 });
@@ -267,7 +257,7 @@ function filterOutDatesAndTimes(text) {
   out = out.replace(/\b\d{4}[-/. ]\d{1,2}[-/. ]\d{1,2}\b/g, ' ');
   out = out.replace(/\b\d{1,2}[-/. ]\d{1,2}[-/. ]\d{2,4}\b/g, ' ');
   // Pelne wsparcie dla polskich znakow i nazewnictwa Unicode
-  out = out.replace(/\b(\d{1,2}\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Sty|Lut|Mar|Kwi|Maj|Cze|Lip|Sie|Wrz|Pa\u017A|Paz|Lis|Gru)[\p{L}]*((\s+\d{2,4})|\b(\s+\d{2,4})?)/giu, ' ');
+  out = out.replace(/\b(\d{1,2}\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Sty|Lut|Kwi|Maj|Cze|Lip|Sie|Wrz|Pa\u017A|Paz|Lis|Gru)[\p{L}]*(\s+\d{2,4})?\b/giu, ' ');
 
   return out.replace(/\s+/g, ' ').trim();
 }
@@ -420,8 +410,7 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
 
     // U1: przy wykrytej zmianie przesuwamy dotychczasowy lastSnapshot do
     // prevSnapshot — diff.html porówna te dwie wersje. Przy 'unchanged'
-    // po prostu odświeżamy bieżący snapshot (treść jest identyczna lub
-    // zmieniła się tylko w sposobie renderowania, a hasz odpowiada).
+    // po prostu odświeżamy bieżący snapshot.
     const snapshotText = (fetchResult && fetchResult.snapshotText) || '';
     const changed = status === 'changed';
 
@@ -446,7 +435,7 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
 
 // Serwer potwierdził odpowiedzią 304, że treść się nie zmieniła — nie było
 // więc czego haszować ani snapshotować. Odświeżamy tylko znaczniki czasu
-// i (jeśli serwer je odesłał) świeże wartości ETag/Last-Modified.
+// i świeże wartości ETag/Last-Modified.
 function commitNotModified(siteId, expected, fetchResult) {
   return withStorageLock(async () => {
     const data = await chrome.storage.local.get('sites');
@@ -491,9 +480,6 @@ async function runCheck(siteId) {
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    // Warunkowe nagłówki (ETag / Last-Modified) wysyłamy tylko, gdy mamy już
-    // ustaloną bazę porównania (lastHash z aktualnego trybu haszowania) —
-    // inaczej odpowiedź 304 nie miałaby się do czego "unchanged" odnieść.
     const canUseConditional = site.hashMode === HASH_MODE && Boolean(site.lastHash);
     const conditional = canUseConditional
       ? { etag: site.etag || null, lastModified: site.lastModified || null }
@@ -519,8 +505,6 @@ async function runCheck(siteId) {
     if (!result) return { status: 'skipped' };
 
     if (result.status === 'changed' && result.site.enableNotifications !== false) {
-      // Błąd samego API powiadomień nie powinien zamieniać poprawnie
-      // wykrytej zmiany w status "error" całego sprawdzenia.
       try {
         await notifyChange(site, lang);
       } catch (notifyErr) {
@@ -588,9 +572,6 @@ function checkAllSites() {
   return checkAllPromise;
 }
 
-// Sprawdza tylko podany zestaw stron (np. świeżo zaimportowanych z kopii
-// zapasowej), zamiast całej listy — żeby po przywróceniu backupu nie trzeba
-// było czekać do pierwszego alarmu (do 24h) na pierwszy realny wynik.
 async function checkSpecificSites(siteIds) {
   const ids = Array.isArray(siteIds) ? siteIds.map(String) : [];
   if (ids.length === 0) return { ok: true, total: 0, changed: 0, unchanged: 0, baseline: 0, errors: 0, skipped: 0 };
@@ -667,9 +648,8 @@ function sanitizeSiteInput(raw) {
   if (!name || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) return null;
 
   const requireCookies = Boolean(s.requireCookies);
-  // Zabezpieczenie także po stronie tła: dotąd blokadę http:// + ciasteczka
-  // egzekwował wyłącznie popup.js. Import z kopii zapasowej (starej lub
-  // spreparowanej) omijał tę ścieżkę, więc powtarzamy sprawdzenie tutaj.
+  // Zabezpieczenie także po stronie tła: blokada http:// + ciasteczka
+  // egzekwowana też tutaj (import z backupu omija popup.js).
   if (parsed.protocol === 'http:' && requireCookies) return null;
 
   let freqIndex = parseInt(s.freqIndex, 10);
@@ -789,8 +769,6 @@ async function handleImportSites(msg) {
 
     const addedOrigins = [];
     const addedIds = [];
-    // Zliczamy pominięte wpisy z podziałem na przyczynę, żeby UI mogło
-    // pokazać coś bardziej użytecznego niż gołą liczbę "pominięto: 7".
     const skippedByReason = { limit: 0, invalid: 0, duplicate: 0 };
 
     for (const raw of incoming) {

@@ -67,7 +67,7 @@ function renderInline(oldLine, newLine) {
 }
 
 // Grupuje ciąg operacji nie-'eq' w bloki; blok z równą liczbą del/ins
-// renderowany jest linia-po-linii inline (czytelny word-diff).
+// (do 3 par) renderowany jest linia-po-linii inline (czytelny word-diff).
 function renderDiff(oldLines, newLines) {
   const ops = computeOps(oldLines, newLines);
   let html = '';
