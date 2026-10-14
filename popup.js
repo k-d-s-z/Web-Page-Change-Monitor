@@ -19,10 +19,12 @@ let summaryTimer = null;
 
 function toggleSettingsPanel(forceOpen = null) {
   const panel = document.getElementById('settings-panel');
+  const btn = document.getElementById('btn-settings');
   if (!panel) return;
 
-  const shouldOpen = forceOpen === null ? panel.classList.contains('hidden') : forceOpen;
-  panel.classList.toggle('hidden', !shouldOpen);
+  const shouldOpen = forceOpen === null ? !panel.classList.contains('open') : forceOpen;
+  panel.classList.toggle('open', shouldOpen);
+  if (btn) btn.setAttribute('aria-expanded', String(shouldOpen));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -54,12 +56,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.querySelectorAll('.lang-btn').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
-      currentLang = e.target.getAttribute('data-lang');
+      currentLang = e.currentTarget.getAttribute('data-lang');
       await chrome.storage.local.set({ language: currentLang });
       updateLangButtonsUI();
       applyTranslations();
       renderSites();
-      toggleSettingsPanel(false);
     });
   });
 
@@ -98,15 +99,18 @@ async function triggerCheck(siteId) {
   await refreshCard(siteId, flashFromResult(result));
 }
 
+// Ikona przycisku to SVG w HTML — NIE nadpisujemy textContent (kasowałoby
+// SVG). Aktualizujemy tylko stan, tytuł i aria-label.
 function updateRefreshAllButton() {
   const btn = document.getElementById('btn-refresh-all');
   if (!btn) return;
 
   const t = TRANSLATIONS[currentLang];
-  btn.textContent = isRefreshingAll ? t.btnRefreshAllBusy : '↻';
+  const label = isRefreshingAll ? t.btnRefreshAllBusy : t.btnRefreshAll;
   btn.disabled = isRefreshingAll || activeSiteCount === 0;
-  btn.title = isRefreshingAll ? t.btnRefreshAllBusy : t.btnRefreshAll;
-  btn.setAttribute('aria-label', isRefreshingAll ? t.btnRefreshAllBusy : t.btnRefreshAll);
+  btn.classList.toggle('busy', isRefreshingAll);
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
 
 function showSummary(text, kind = '', autoHideMs = 0) {
@@ -201,6 +205,7 @@ async function createBackup() {
     sites: sites.map((s) => ({
       name: s.name,
       url: s.url,
+      openUrl: s.openUrl || s.url,
       freqIndex: s.freqIndex,
       ignoreDates: Boolean(s.ignoreDates),
       requireCookies: Boolean(s.requireCookies),
@@ -335,6 +340,10 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-id').value = site.id;
     document.getElementById('site-name').value = site.name;
     document.getElementById('site-url').value = site.url;
+    // "Otwierana strona": pokazujemy tylko, gdy różni się od monitorowanego
+    // (nie zaśmiecamy pola kopią URL przy zwykłej edycji).
+    document.getElementById('site-openurl').value =
+      (site.openUrl && site.openUrl !== site.url) ? site.openUrl : '';
     document.getElementById('site-freq').value = site.freqIndex;
     document.getElementById('site-ignore-dates').checked = site.ignoreDates !== false;
     document.getElementById('site-cookies').checked = site.requireCookies !== false;
@@ -344,6 +353,7 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-id').value = '';
     document.getElementById('site-name').value = prefill ? prefill.name || '' : '';
     document.getElementById('site-url').value = prefill ? prefill.url || '' : '';
+    document.getElementById('site-openurl').value = '';
     document.getElementById('site-freq').value = DEFAULT_FREQ_INDEX;
     document.getElementById('site-ignore-dates').checked = true;
     document.getElementById('site-cookies').checked = false;
@@ -380,6 +390,7 @@ async function saveSite() {
   const id = document.getElementById('site-id').value;
   const name = document.getElementById('site-name').value.trim();
   let url = document.getElementById('site-url').value.trim();
+  const openUrl = document.getElementById('site-openurl').value.trim();
   const freqIndex = parseInt(document.getElementById('site-freq').value, 10);
   const ignoreDates = document.getElementById('site-ignore-dates').checked;
   const requireCookies = document.getElementById('site-cookies').checked;
@@ -415,7 +426,7 @@ async function saveSite() {
 
   const res = await callBackground({
     action: 'saveSite',
-    site: { id, name, url, freqIndex, ignoreDates, requireCookies, enableNotifications }
+    site: { id, name, url, openUrl, freqIndex, ignoreDates, requireCookies, enableNotifications }
   });
 
   if (!res.ok) {

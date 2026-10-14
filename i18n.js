@@ -1,11 +1,15 @@
 const TRANSLATIONS = {
   en: {
     titleList: 'Monitored Pages',
-    btnAdd: '+ Add New Page',
+    btnAdd: 'Add New Page',
     btnRefreshAll: 'Refresh all',
     btnRefreshAllBusy: 'Refreshing…',
     btnBackup: 'Create Backup',
     btnRestore: 'Restore Backup',
+    settingsTitle: 'Settings',
+    lblLanguage: 'Language',
+    titleSettings: 'Settings',
+    titleCloseSettings: 'Close settings',
     summaryProgress: 'Refreshing',
     summaryRefreshed: 'Refreshed',
     summaryChanges: 'changes',
@@ -64,18 +68,22 @@ const TRANSLATIONS = {
     checkBaseline: 'Initial state saved',
     checkChanged: 'Change detected!',
     checkError: 'Error',
-    emptyState: 'No pages monitored yet.\nClick "+ Add New Page" below to start.',
+    emptyState: 'No pages monitored yet.\nClick the ＋ button in the top right corner to start.',
     freqLabels: ['1 min', '5 min', '10 min', '1 hr', '24 hrs'],
     urlPlaceholder: 'e.g. https://news-site.com',
     namePlaceholder: 'e.g. News / Store'
   },
   pl: {
     titleList: 'Monitorowane strony',
-    btnAdd: '+ Dodaj nową stronę',
+    btnAdd: 'Dodaj nową stronę',
     btnRefreshAll: 'Odśwież wszystkie',
     btnRefreshAllBusy: 'Odświeżanie…',
-    btnBackup: 'Utwórz kopię zapasową',
-    btnRestore: 'Przywróć kopię zapasową',
+    btnBackup: 'Utwórz kopię',
+    btnRestore: 'Przywróć kopię',
+    settingsTitle: 'Ustawienia',
+    lblLanguage: 'Język',
+    titleSettings: 'Ustawienia',
+    titleCloseSettings: 'Zamknij ustawienia',
     summaryProgress: 'Odświeżanie',
     summaryRefreshed: 'Odświeżono',
     summaryChanges: 'zmiany',
@@ -134,7 +142,7 @@ const TRANSLATIONS = {
     checkBaseline: 'Zapisano stan początkowy',
     checkChanged: 'Wykryto zmianę!',
     checkError: 'Błąd',
-    emptyState: 'Brak monitorowanych stron.\nKliknij „+ Dodaj nową stronę" poniżej, aby zacząć.',
+    emptyState: 'Brak monitorowanych stron.\nKliknij przycisk ＋ w prawym górnym roku, aby zacząć.',
     freqLabels: ['1 min', '5 min', '10 min', '1 godz', '24 godz'],
     urlPlaceholder: 'np. https://dziennik.pl',
     namePlaceholder: 'np. Wiadomości / Sklep'
@@ -162,6 +170,16 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
     if (t[key]) el.innerText = t[key];
+  });
+
+  // Tytuły (tooltipy) i aria-label — wcześniej zahardkodowane po angielsku.
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-title');
+    if (t[key]) el.title = t[key];
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-aria');
+    if (t[key]) el.setAttribute('aria-label', t[key]);
   });
 
   const urlInput = document.getElementById('site-url');

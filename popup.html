@@ -31,8 +31,8 @@
       color: #FFFFFF;
     }
     .counter-badge {
-      font-size: 11px;
-      color: #8B5CF6;
+      font-size: 12px;
+      color: #A78BFA;
       font-weight: 600;
       margin-left: 4px;
     }
@@ -50,15 +50,18 @@
       justify-content: center;
       width: 32px;
       height: 32px;
+      box-sizing: border-box;
       background: #18181F;
       border: 1px solid #2B2B36;
-      color: #E5E7EB;
+      color: #9CA3AF;
       border-radius: 10px;
       cursor: pointer;
       transition: all 0.2s ease;
-      font-size: 16px;
-      line-height: 1;
       padding: 0;
+    }
+    .icon-btn svg {
+      display: block;
+      pointer-events: none;
     }
     .icon-btn:hover {
       color: #FFFFFF;
@@ -69,54 +72,73 @@
       outline: 2px solid #8B5CF6;
       outline-offset: 1px;
     }
+    .icon-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
     .icon-btn.primary {
-      background: #8B5CF6;
-      border-color: #8B5CF6;
+      background: #7C3AED;
+      border-color: #7C3AED;
       color: #FFFFFF;
     }
     .icon-btn.primary:hover {
-      background: #7C3AED;
-      border-color: #7C3AED;
+      background: #8B5CF6;
+      border-color: #8B5CF6;
     }
-    .icon-btn.spinning {
+    .icon-btn.busy svg {
       animation: spin 0.9s linear infinite;
     }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    /* Panel ustawień: wysuwanie przez grid-rows 0fr -> 1fr (płynne,
+       bez znanej pulapki animowania max-height). */
     .settings-panel {
-      display: block;
-      background: rgba(24, 24, 31, 0.95);
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      margin-bottom: 0;
+      transition: grid-template-rows 0.25s ease, opacity 0.25s ease, margin-bottom 0.25s ease;
+    }
+    .settings-panel.open {
+      grid-template-rows: 1fr;
+      opacity: 1;
+      margin-bottom: 12px;
+    }
+    .settings-panel-inner {
+      overflow: hidden;
+      min-height: 0;
+    }
+    .settings-box {
+      background: #18181F;
       border: 1px solid #2B2B36;
       border-radius: 12px;
       padding: 10px 12px 12px;
-      margin-bottom: 12px;
-      transition: all 0.2s ease;
-    }
-    .settings-panel.hidden {
-      display: none;
     }
     .settings-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       color: #F5F5F5;
       font-size: 13px;
       font-weight: 700;
     }
-    .settings-section {
-      margin-bottom: 10px;
+    .settings-header .icon-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
     }
-    .settings-section:last-child {
-      margin-bottom: 0;
+    /* Jeden rząd: język + eksport + import — równe szerokości i wysokości. */
+    .settings-actions {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
     }
-    .settings-label {
-      display: block;
-      font-size: 10px;
-      font-weight: 600;
-      margin-bottom: 4px;
-      color: #9CA3AF;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+    .settings-actions > * {
+      flex: 1;
+      min-width: 0;
     }
     .lang-switcher {
       display: flex;
@@ -124,17 +146,18 @@
       background: #121218;
       border: 1px solid #23232F;
       padding: 2px;
-      border-radius: 12px;
-      width: fit-content;
+      border-radius: 10px;
+      box-sizing: border-box;
     }
     .lang-btn {
+      flex: 1;
       background: transparent;
       border: none;
       color: #9CA3AF;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
-      padding: 6px 10px;
-      border-radius: 8px;
+      padding: 4px 10px;
+      border-radius: 7px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
@@ -142,32 +165,51 @@
       color: #FFFFFF;
     }
     .lang-btn.active {
-      background: #8B5CF6;
+      background: #7C3AED;
       color: #FFFFFF;
     }
-    .settings-actions {
-      display: flex;
-      gap: 8px;
-    }
-    .settings-actions .btn-secondary {
+    .btn-secondary {
       flex: 1;
+      padding: 6px 8px;
+      background: #18181F;
+      border: 1px solid #2B2B36;
+      color: #E5E7EB;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-sizing: border-box;
+    }
+    .btn-secondary:hover {
+      color: #FFFFFF;
+      background: #23232F;
+      border-color: #3B3B4A;
+    }
+    .btn-secondary:focus-visible {
+      outline: 2px solid #8B5CF6;
+      outline-offset: 1px;
     }
     .btn-main {
       width: 100%;
-      padding: 8px 10px;
-      background: #8B5CF6;
+      padding: 9px 10px;
+      background: #7C3AED;
       color: #FFFFFF;
       border: none;
       border-radius: 8px;
       font-weight: 700;
-      font-size: 12px;
+      font-size: 13px;
       cursor: pointer;
       margin-bottom: 8px;
       transition: all 0.2s ease;
       box-shadow: none;
     }
     .btn-main:hover {
-      background: #7C3AED;
+      background: #8B5CF6;
     }
     .btn-main:disabled {
       opacity: 0.4;
@@ -186,28 +228,6 @@
       background: #23232F;
       color: #FFFFFF;
     }
-    .btn-secondary {
-      flex: 1;
-      padding: 7px 8px;
-      background: #18181F;
-      border: 1px solid #2B2B36;
-      color: #E5E7EB;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-align: center;
-    }
-    .btn-secondary:hover {
-      color: #FFFFFF;
-      background: #23232F;
-      border-color: #3B3B4A;
-    }
-    .btn-secondary:focus-visible {
-      outline: 2px solid #8B5CF6;
-      outline-offset: 1px;
-    }
     .list-footer {
       position: sticky;
       bottom: 0;
@@ -219,10 +239,10 @@
       border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
     .refresh-summary {
-      font-size: 11px;
+      font-size: 12px;
       color: #9CA3AF;
       margin-bottom: 6px;
-      min-height: 14px;
+      min-height: 15px;
     }
     .refresh-summary:empty {
       display: none;
@@ -407,11 +427,11 @@
     .btn-refresh.spinning .icon {
       animation: spin 0.9s linear infinite;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
     @media (prefers-reduced-motion: reduce) {
-      .btn-refresh.spinning .icon { animation-duration: 3s; }
+      .btn-refresh.spinning .icon,
+      .icon-btn.busy svg { animation-duration: 3s; }
+      .settings-panel { transition: none; }
+      .settings-panel:not(.open) { display: none; }
     }
     .btn-toggle {
       color: #9CA3AF;
@@ -424,12 +444,12 @@
     .confirm-text {
       flex: 1;
       min-width: 0;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 500;
       color: #F3F4F6;
     }
     .confirm-name {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: normal;
       color: #9CA3AF;
       white-space: nowrap;
@@ -443,38 +463,39 @@
       border-radius: 6px;
     }
     .btn-confirm-yes {
-      background: #8B5CF6;
+      background: #7C3AED;
       border: none;
       color: #FFFFFF;
     }
     .btn-confirm-yes:hover {
-      background: #7C3AED;
+      background: #8B5CF6;
     }
     .hint, .field-hint {
-      font-size: 11px;
-      color: #7A818D;
+      font-size: 12px;
+      color: #9CA3AF;
       margin-top: 3px;
+      line-height: 1.45;
     }
     .hint { text-align: center; }
     .badge-changed {
-      background: #8B5CF6;
+      background: #7C3AED;
       color: #FFFFFF;
-      font-size: 8px;
+      font-size: 9px;
       font-weight: 700;
-      padding: 1px 5px;
+      padding: 2px 6px;
       border-radius: 4px;
-      margin-left: 4px;
+      margin-left: 5px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     .badge-paused {
       background: #374151;
-      color: #D1D5DB;
-      font-size: 8px;
+      color: #E5E7EB;
+      font-size: 9px;
       font-weight: 700;
-      padding: 1px 5px;
+      padding: 2px 6px;
       border-radius: 4px;
-      margin-left: 4px;
+      margin-left: 5px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -482,7 +503,7 @@
       text-align: center;
       padding: 24px 8px;
       color: #9CA3AF;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.6;
     }
     .form-group {
@@ -490,7 +511,7 @@
     }
     label {
       display: block;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       margin-bottom: 4px;
       color: #9CA3AF;
@@ -499,7 +520,7 @@
     }
     input, select {
       width: 100%;
-      padding: 7px 10px;
+      padding: 8px 10px;
       background: #18181F;
       border: 1px solid #2B2B36;
       color: #FFFFFF;
@@ -517,7 +538,7 @@
     input[type="checkbox"] {
       width: auto;
       margin-right: 6px;
-      accent-color: #8B5CF6;
+      accent-color: #7C3AED;
     }
     .checkbox-label {
       display: flex;
@@ -533,12 +554,13 @@
     .form-message {
       display: none;
       background: #1F1F28;
-      border: 1px solid #8B5CF6;
+      border: 1px solid #7C3AED;
       color: #F3F4F6;
       border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 11px;
+      padding: 7px 10px;
+      font-size: 12px;
       margin-bottom: 10px;
+      line-height: 1.45;
     }
     .form-message.warn {
       border-color: #FBBF24;
@@ -557,34 +579,38 @@
         <span id="site-count-badge" class="counter-badge">(0/50)</span>
       </h2>
       <div class="header-actions">
-        <button id="btn-settings" class="icon-btn" type="button" aria-label="Settings" title="Settings">
-          <span aria-hidden="true">⚙️</span>
+        <button id="btn-settings" class="icon-btn" type="button" aria-expanded="false" data-i18n-aria="titleSettings" data-i18n-title="titleSettings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
         </button>
-        <button id="btn-refresh-all" class="icon-btn primary" type="button" data-i18n="btnRefreshAll" aria-label="Refresh all" title="Refresh all">↻</button>
-        <button id="btn-add-view" class="icon-btn primary" type="button" data-i18n="btnAdd" aria-label="Add New Page" title="Add New Page">＋</button>
+        <button id="btn-refresh-all" class="icon-btn" type="button" data-i18n-aria="btnRefreshAll" data-i18n-title="btnRefreshAll">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+        </button>
+        <button id="btn-add-view" class="icon-btn primary" type="button" data-i18n-aria="btnAdd" data-i18n-title="btnAdd">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        </button>
       </div>
     </div>
 
-    <div id="settings-panel" class="settings-panel hidden" aria-live="polite">
-      <div class="settings-header">
-        <span>Settings</span>
-        <button id="btn-close-settings" class="icon-btn" type="button" aria-label="Close settings" title="Close settings">✕</button>
-      </div>
+    <div id="settings-panel" class="settings-panel">
+      <div class="settings-panel-inner">
+        <div class="settings-box">
+          <div class="settings-header">
+            <span data-i18n="settingsTitle">Settings</span>
+            <button id="btn-close-settings" class="icon-btn" type="button" data-i18n-aria="titleCloseSettings" data-i18n-title="titleCloseSettings">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
 
-      <div class="settings-section">
-        <label class="settings-label">Language</label>
-        <div class="lang-switcher" role="group" aria-label="Select language">
-          <button class="lang-btn active" type="button" data-lang="en">EN</button>
-          <button class="lang-btn" type="button" data-lang="pl">PL</button>
+          <div class="settings-actions">
+            <div class="lang-switcher" role="group" data-i18n-aria="lblLanguage">
+              <button class="lang-btn" type="button" data-lang="en">EN</button>
+              <button class="lang-btn" type="button" data-lang="pl">PL</button>
+            </div>
+            <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Create Backup</button>
+            <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Restore Backup</button>
+            <input type="file" id="restore-file-input" accept=".json,application/json" style="display: none;">
+          </div>
         </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-actions">
-          <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Create Backup</button>
-          <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Restore Backup</button>
-        </div>
-        <input type="file" id="restore-file-input" accept=".json,application/json" style="display: none;">
       </div>
     </div>
 
@@ -612,7 +638,7 @@
     <div class="form-group">
       <label data-i18n="lblOpenUrl">Opened page (optional)</label>
       <input type="text" id="site-openurl" placeholder="https://...">
-      <div class="field-hint" data-i18n="hintOpenUrl">Opened when you click the card or notification. Useful when monitoring an API/data URL — put the human-readable page address here.</div>
+      <div class="field-hint" data-i18n="hintOpenUrl">Opened when you click the card or notification.</div>
     </div>
     
     <div class="form-group">
