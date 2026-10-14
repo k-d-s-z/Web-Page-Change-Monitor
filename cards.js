@@ -9,9 +9,9 @@ function escapeHtml(str) {
 }
 
 // Favicona przez wbudowane API chrome://favicon (uprawnienie "favicon" +
-// web_accessible_resources w manifeście) — czyta z lokalnej pamięci
-// podręcznej przeglądarki, bez żadnego zapytania do serwera strony czy
-// zewnętrznego serwisu (np. Google favicon service).
+// web_accessible_resources w manife\u015bcie) \u2014 czyta z lokalnej pami\u0119ci
+// podr\u0119cznej przegl\u0105darki, bez \u017cadnego zapytania do serwera strony czy
+// zewn\u0119trznego serwisu (np. Google favicon service).
 function faviconUrl(pageUrl, size = 32) {
   const url = new URL(chrome.runtime.getURL('/_favicon/'));
   url.searchParams.set('pageUrl', pageUrl);
@@ -19,8 +19,8 @@ function faviconUrl(pageUrl, size = 32) {
   return url.toString();
 }
 
-// Jednolity zestaw ikon liniowych (stroke = currentColor), dzięki czemu
-// kolor ikon wynika wyłącznie z CSS i nie zależy od czcionki emoji systemu.
+// Jednolity zestaw ikon liniowych (stroke = currentColor), dzi\u0119ki czemu
+// kolor ikon wynika wy\u0142\u0105cznie z CSS i nie zale\u017cy od czcionki emoji systemu.
 const SVG_OPEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
 const ICONS = {
   refresh: `${SVG_OPEN}<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
@@ -31,16 +31,16 @@ const ICONS = {
   warning: '<svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
 };
 
-// I3: czas względny dla świeżych sprawdzeń („X min temu"), dokładna data
-// tylko dla starszych niż 24 h — użytkownik od razu widzi, jak „świeże"
-// jest ostatnie sprawdzenie, bez porównywania zegarka z etykietą.
+// I3: czas wzgl\u0119dny dla \u015bwie\u017cych sprawdze\u0144 (\u201eX min temu"), dok\u0142adna data
+// tylko dla starszych ni\u017c 24 h \u2014 u\u017cytkownik od razu widzi, jak \u201e\u015bwie\u017ce"
+// jest ostatnie sprawdzenie, bez por\u00f3wnywania zegarka z etykiet\u0105.
 function formatLastCheck(timestamp) {
   const locale = currentLang === 'pl' ? 'pl-PL' : 'en-US';
   const pl = currentLang === 'pl';
   const date = new Date(timestamp);
   const diffMs = Date.now() - timestamp;
 
-  if (diffMs < 60_000) return pl ? 'właśnie teraz' : 'just now';
+  if (diffMs < 60_000) return pl ? 'w\u0142a\u015bnie teraz' : 'just now';
   const mins = Math.floor(diffMs / 60_000);
   if (mins < 60) return pl ? `${mins} min temu` : `${mins} min ago`;
   if (mins < 24 * 60) {
@@ -63,7 +63,7 @@ function buildCard(site, flash = null) {
   card.tabIndex = 0;
 
   const labelFreq = t.freqLabels[site.freqIndex] || t.freqLabels[0];
-  // U4: pauza widoczna też tekstowo, nie tylko przez opacity.
+  // U4: pauza widoczna te\u017c tekstowo, nie tylko przez opacity.
   const pausedBadge = site.isPaused ? `<span class="badge-paused">${t.badgePaused}</span>` : '';
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
   const lastCheck = site.lastCheckTime ? formatLastCheck(site.lastCheckTime) : '&mdash;';
@@ -74,9 +74,10 @@ function buildCard(site, flash = null) {
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
     : '';
-  // U1: link do podglądu zmian — pokazywany zawsze, gdy istnieje poprzednia
-  // wersja snapshotu (nie znika po oznaczeniu zmiany jako odczytanej).
-  const diffHtml = site.prevSnapshot
+  // U1: link do podgl\u0105du zmian \u2014 widoczny tylko przy NIEODCZYTANEJ zmianie.
+  // Klikni\u0119cie otwiera diff i czy\u015bci hasChanged (refreshSiteContent),
+  // wi\u0119c po obejrzeniu zmian przycisk znika.
+  const diffHtml = site.hasChanged && site.prevSnapshot
     ? ` &bull; <a href="#" class="link-diff" title="${t.titleDiff}">${t.linkDiff}</a>`
     : '';
 
@@ -146,9 +147,9 @@ function buildCard(site, flash = null) {
 
   card.addEventListener('keydown', onCardKeyDown);
 
-  // A1: Enter/Spacja na karcie (na .site-info) otwiera „otwieraną stronę"
-  // — dotąd obsługa klawiatury kończyła się na strzałkach z drag.js.
-  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnątrz.
+  // A1: Enter/Spacja na karcie (na .site-info) otwiera \u201eotwieran\u0105 stron\u0119"
+  // \u2014 dot\u0105d obs\u0142uga klawiatury ko\u0144czy\u0142a si\u0119 na strza\u0142kach z drag.js.
+  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewn\u0105trz.
   card.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (e.target.closest('button, a, input, select, textarea')) return;
@@ -210,7 +211,7 @@ function enterDeleteConfirm(card, site) {
   noBtn.focus();
 
   // A3: Escape anuluje potwierdzenie usuwania (karta i tak jest
-  // przebudowywana przez refreshCard, więc listener znika razem z nią).
+  // przebudowywana przez refreshCard, wi\u0119c listener znika razem z ni\u0105).
   card.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
@@ -226,7 +227,7 @@ async function renderSites() {
 
   document.getElementById('site-count-badge').textContent = `(${sites.length}/${MAX_SITES})`;
 
-  // Pusty stan (U6): zamiast pustego kontenera — wyraźne CTA.
+  // Pusty stan (U6): zamiast pustego kontenera \u2014 wyra\u017ane CTA.
   if (sites.length === 0) {
     const emptyEl = document.createElement('div');
     emptyEl.className = 'empty-state';

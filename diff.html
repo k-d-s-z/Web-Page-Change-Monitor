@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Change details — Web Page Change Monitor</title>
+  <title>Change details &#x2014; Web Page Change Monitor</title>
   <style>
     :root {
       color-scheme: dark;
@@ -70,6 +70,44 @@
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+    }
+
+    .stats {
+      display: inline-flex;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .stat-add {
+      color: #22C55E;
+    }
+
+    .stat-del {
+      color: #F87171;
+    }
+
+    .diff-skip {
+      display: block;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 2px 8px;
+      margin: 3px -4px;
+      font-size: 12px;
+      font-style: italic;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .diff-skip:hover,
+    .diff-skip:focus-visible {
+      color: var(--text);
+      border-color: var(--accent);
+      outline: none;
     }
 
     a {
@@ -198,7 +236,8 @@
         <div class="meta" id="meta"></div>
       </div>
       <div class="toolbar">
-        <a id="open" href="#" target="_blank" rel="noopener"><span id="open-label">Open page</span> ↗</a>
+        <span class="stats" id="stats"></span>
+        <a id="open" href="#" target="_blank" rel="noopener"><span id="open-label">Open page</span> &#x2197;</a>
       </div>
     </div>
 

@@ -91,7 +91,7 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    /* Panel ustawień: wysuwanie przez grid-rows 0fr -> 1fr (płynne,
+    /* Panel ustawie&#x144;: wysuwanie przez grid-rows 0fr -> 1fr (p&#x142;ynne,
        bez znanej pulapki animowania max-height). */
     .settings-panel {
       display: grid;
@@ -130,20 +130,32 @@
       height: 26px;
       border-radius: 8px;
     }
-    /* Dwa rzędy: rząd 1 — przełącznik języka (pełna szerokość),
-       rząd 2 — kopia ustawień + przywracanie (równe szerokości). */
-    .settings-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: stretch;
+    /* Uk&#x142;ad 2&#xd7;2: kolumna &#x201e;Kopia ustawie&#x144;" (Utw&#xf3;rz/Przywr&#xf3;&#x107;) i kolumna
+       &#x201e;J&#x119;zyk" (EN/PL) &#x2014; r&#xf3;wne kolumny z kr&#xf3;tkimi nag&#x142;&#xf3;wkami. */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: start;
     }
-    .settings-actions > button {
-      flex: 1 1 calc(50% - 4px);
+    .settings-col-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #9CA3AF;
+      margin-bottom: 6px;
+      text-align: center;
+    }
+    .settings-col-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .settings-col-actions > button {
+      flex: 1;
       min-width: 0;
     }
     .lang-switcher {
-      flex: 1 1 100%;
       display: flex;
       gap: 4px;
       background: #121218;
@@ -151,6 +163,7 @@
       padding: 2px;
       border-radius: 10px;
       box-sizing: border-box;
+      width: 100%;
     }
     .lang-switcher .lang-btn {
       flex: 1;
@@ -283,8 +296,8 @@
       outline: 2px solid #8B5CF6;
       outline-offset: 1px;
     }
-    /* A2: pauza — karta w pełni czytelna (bez opacity na całości);
-       wyciszamy tylko nazwę i metadane oraz ramkę. Działa też z hover. */
+    /* A2: pauza &#x2014; karta w pe&#x142;ni czytelna (bez opacity na ca&#x142;o&#x15b;ci);
+       wyciszamy tylko nazw&#x119; i metadane oraz ramk&#x119;. Dzia&#x142;a te&#x17c; z hover. */
     .site-card.paused {
       border-style: dashed;
       border-color: #23232F;
@@ -630,15 +643,23 @@
             </button>
           </div>
 
-          <div class="settings-actions">
-            <div class="lang-switcher" role="group" data-i18n-aria="lblLanguage">
-              <button class="lang-btn" type="button" data-lang="en">EN</button>
-              <button class="lang-btn" type="button" data-lang="pl">PL</button>
+          <div class="settings-grid">
+            <div class="settings-col">
+              <div class="settings-col-label" data-i18n="lblBackupCol">Settings backup</div>
+              <div class="settings-col-actions">
+                <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Create</button>
+                <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Restore</button>
+              </div>
             </div>
-            <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Create Backup</button>
-            <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Restore Backup</button>
-            <input type="file" id="restore-file-input" accept=".json,application/json" style="display: none;">
+            <div class="settings-col">
+              <div class="settings-col-label" data-i18n="lblLanguage">Language</div>
+              <div class="lang-switcher" role="group" data-i18n-aria="lblLanguage">
+                <button class="lang-btn" type="button" data-lang="en">EN</button>
+                <button class="lang-btn" type="button" data-lang="pl">PL</button>
+              </div>
+            </div>
           </div>
+          <input type="file" id="restore-file-input" accept=".json,application/json" style="display: none;">
         </div>
       </div>
     </div>

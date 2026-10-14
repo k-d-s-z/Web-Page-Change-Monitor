@@ -1,34 +1,49 @@
-// Diff „przed → po" dla strony wskazanej w hashu URL (diff.html#<siteId>).
-// Dane czytane bezpośrednio z chrome.storage.local — nie przechodzą przez
-// service worker, więc strona działa nawet gdy SW śpi.
+// Diff "przed \u2192 po" dla strony wskazanej w hashu URL (diff.html#<siteId>).
+// Dane czytane bezpo\u015brednio z chrome.storage.local \u2014 nie przechodz\u0105 przez
+// service worker, wi\u0119c strona dzia\u0142a nawet gdy SW \u015bpi.
 //
-// Algorytm: LCS na liniach (tani — setki/tysiące linii), a wewnątrz bloku
-// zmienionych linii ten sam LCS na słowach (krótkie ciągi) dla efektu
-// <del>stare</del><ins>nowe</ins> w obrębie jednej linii.
+// Algorytm: LCS na liniach, a wewn\u0105trz bloku zmienionych linii ten sam LCS
+// na s\u0142owach (kr\u00f3tkie ci\u0105gi) dla efektu <del>stare</del><ins>nowe</ins>.
 //
-// B2: „Otwórz stronę" prowadzi do site.openUrl (URL monitorowany może być
-// endpointem JSON, nieczytelnym dla człowieka); w metadanych pokazujemy
-// oba URL-e, gdy się różnią. Strona tłumaczy się na PL/EN (D1) zgodnie
-// z językiem zapisanym w storage.
+// Czytelno\u015b\u0107: niezmienione ci\u0105gi d\u0142u\u017csze ni\u017c 10 linii s\u0105 zwijane do
+// klikalnego separatora "\u22ef N niezmienionych linii \u22ef" \u2014 zmiany wida\u0107 od
+// razu, bez przewijania morza identycznego tekstu. Pasek narz\u0119dzi pokazuje
+// statystyki +dodane/\u2212usuni\u0119te.
+//
+// B2: "Otw\u00f3rz stron\u0119" prowadzi do site.openUrl (URL monitorowany mo\u017ce by\u0107
+// endpointem JSON, nieczytelnym dla cz\u0142owieka); w metadanych pokazujemy
+// oba URL-e, gdy si\u0119 r\u00f3\u017cni\u0105. Strona t\u0142umaczy si\u0119 na PL/EN (D1) zgodnie
+// z j\u0119zykiem zapisanym w storage.
+
+const CONTEXT_LINES = 3;   // ile linii kontekstu wok\u00f3\u0142 ka\u017cdego bloku zmian
+const COLLAPSE_MIN = 10;   // d\u0142u\u017csze niezmienione ci\u0105gi s\u0105 zwijane
 
 const STR = {
   en: {
-    title: 'Change details — Web Page Change Monitor',
+    title: 'Change details \u2014 Web Page Change Monitor',
     openPage: 'Open page',
     siteNotFound: 'Site not found.',
-    noVersionYet: 'No stored version of this page yet — the next detected change will show a full diff.',
+    noVersionYet: 'No stored version of this page yet \u2014 the next detected change will show a full diff.',
     onlyCurrent: 'Only the current version is stored (baseline saved after the update). The next detected change will show a diff.',
     noChanges: 'No visible text changes.',
-    monitoredUrl: 'monitored'
+    monitoredUrl: 'monitored',
+    skipLines: 'unchanged lines',
+    skipTitle: 'Click to show these lines',
+    added: 'added',
+    removed: 'removed'
   },
   pl: {
-    title: 'Szczegóły zmiany — Web Page Change Monitor',
-    openPage: 'Otwórz stronę',
+    title: 'Szczeg\u00f3\u0142y zmiany \u2014 Web Page Change Monitor',
+    openPage: 'Otw\u00f3rz stron\u0119',
     siteNotFound: 'Nie znaleziono takiej strony.',
-    noVersionYet: 'Nie ma jeszcze zapisanej wersji tej strony — kolejna wykryta zmiana pokaże pełny diff.',
-    onlyCurrent: 'Zapisana jest tylko bieżąca wersja (baseline zapisany po aktualizacji). Kolejna wykryta zmiana pokaże diff.',
-    noChanges: 'Brak widocznych zmian treści.',
-    monitoredUrl: 'monitorowany'
+    noVersionYet: 'Nie ma jeszcze zapisanej wersji tej strony \u2014 kolejna wykryta zmiana poka\u017ce pe\u0142ny diff.',
+    onlyCurrent: 'Zapisana jest tylko bie\u017c\u0105ca wersja (baseline zapisany po aktualizacji). Kolejna wykryta zmiana poka\u017ce diff.',
+    noChanges: 'Brak widocznych zmian tre\u015bci.',
+    monitoredUrl: 'monitorowany',
+    skipLines: 'niezmienionych linii',
+    skipTitle: 'Kliknij, aby pokaza\u0107 te linie',
+    added: 'dodane',
+    removed: 'usuni\u0119te'
   }
 };
 
@@ -38,14 +53,14 @@ function esc(s) {
   })[c]);
 }
 
-// Zwraca listę operacji: {t:'eq'|'del'|'ins', l:string}
+// Zwraca list\u0119 operacji: {t:'eq'|'del'|'ins', l:string}
 function computeOps(a, b) {
   const n = a.length;
   const m = b.length;
 
-  // Zabezpieczenie przed O(n·m) na ogromnych zestawach (np. snapshot
-  // ucięty do limitu 150k znaków może dać ~10k linii): zamiast zawiesić
-  // stronę, pokazujemy „wszystko wymienione" w blokach.
+  // Zabezpieczenie przed O(n\u00b7m) na ogromnych zestawach (np. snapshot
+  // uci\u0119ty do limitu 150k znak\u00f3w mo\u017ce da\u0107 ~10k linii): zamiast zawiesi\u0107
+  // stron\u0119, pokazujemy "wszystko wymienione" w blokach.
   if (n * m > 4_000_000) {
     const ops = [];
     a.forEach((l) => ops.push({ t: 'del', l }));
@@ -53,7 +68,7 @@ function computeOps(a, b) {
     return ops;
   }
 
-  // dp[i][j] = długość LCS a[i:] i b[j:]
+  // dp[i][j] = d\u0142ugo\u015b\u0107 LCS a[i:] i b[j:]
   const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
@@ -80,7 +95,7 @@ function computeOps(a, b) {
   return ops;
 }
 
-// Word-diff wewnątrz PARY linii (1 usunięta + 1 dodana).
+// Word-diff wewn\u0105trz PARY linii (1 usuni\u0119ta + 1 dodana).
 function renderInline(oldLine, newLine) {
   const ops = computeOps(oldLine.split(' '), newLine.split(' '));
   let out = '';
@@ -97,37 +112,114 @@ function line(kind, inner, lineText) {
   return `<span class="${cls}">${inner || '\u00a0'}</span>`;
 }
 
-// Grupuje ciąg operacji nie-'eq' w bloki; blok z równą liczbą del/ins
-// (do 3 par) renderowany jest linia-po-linii inline (czytelny word-diff).
-function renderDiff(oldLines, newLines) {
-  const ops = computeOps(oldLines, newLines);
-  let html = '';
-  let k = 0;
+function eqLine(text) {
+  return line('equivalent', esc(text), text);
+}
 
+// Grupuje operacje: ci\u0105gi 'eq' i bloki zmian (del/ins).
+function groupOps(ops) {
+  const groups = [];
+  let k = 0;
   while (k < ops.length) {
     if (ops[k].t === 'eq') {
-      html += line('equivalent', esc(ops[k].l), ops[k].l);
-      k++;
-      continue;
-    }
-
-    // Blok operacji nie-eq.
-    const block = [];
-    while (k < ops.length && ops[k].t !== 'eq') block.push(ops[k++]);
-
-    const dels = block.filter((o) => o.t === 'del');
-    const ins = block.filter((o) => o.t === 'ins');
-
-    if (dels.length === ins.length && dels.length > 0 && dels.length <= 3) {
-      for (let p = 0; p < dels.length; p++) {
-        html += line('changed', renderInline(dels[p].l, ins[p].l), dels[p].l);
-      }
+      const lines = [];
+      while (k < ops.length && ops[k].t === 'eq') lines.push(ops[k++].l);
+      groups.push({ type: 'eq', lines });
     } else {
-      dels.forEach((o) => { html += line('removed', `<del>${esc(o.l)}</del>`, o.l); });
-      ins.forEach((o) => { html += line('added', `<ins>${esc(o.l)}</ins>`, o.l); });
+      const block = [];
+      while (k < ops.length && ops[k].t !== 'eq') block.push(ops[k++]);
+      groups.push({ type: 'chg', ops: block });
     }
   }
+  return groups;
+}
+
+// Blok zmian: pary del/ins (do 3 par) renderowane word-diffem liniowo,
+// reszta jako osobne linie dodane/usuni\u0119te.
+function renderChangeBlock(block) {
+  let html = '';
+  const dels = block.filter((o) => o.t === 'del');
+  const ins = block.filter((o) => o.t === 'ins');
+
+  if (dels.length === ins.length && dels.length > 0 && dels.length <= 3) {
+    for (let p = 0; p < dels.length; p++) {
+      html += line('changed', renderInline(dels[p].l, ins[p].l), dels[p].l);
+    }
+  } else {
+    dels.forEach((o) => { html += line('removed', `<del>${esc(o.l)}</del>`, o.l); });
+    ins.forEach((o) => { html += line('added', `<ins>${esc(o.l)}</ins>`, o.l); });
+  }
   return html;
+}
+
+// Renderuje diff ze zwijaniem: zwraca { html, skipped, added, removed }.
+function renderDiff(oldLines, newLines, t) {
+  const ops = computeOps(oldLines, newLines);
+  const groups = groupOps(ops);
+
+  let added = 0;
+  let removed = 0;
+  for (const g of groups) {
+    if (g.type !== 'chg') continue;
+    for (const o of g.ops) {
+      if (o.t === 'ins') added++;
+      else removed++;
+    }
+  }
+
+  let html = '';
+  const skipped = [];
+
+  groups.forEach((g, gi) => {
+    if (g.type === 'chg') {
+      html += renderChangeBlock(g.ops);
+      return;
+    }
+
+    const isFirst = gi === 0;
+    const isLast = gi === groups.length - 1;
+    const n = g.lines.length;
+
+    if (n <= COLLAPSE_MIN) {
+      html += g.lines.map(eqLine).join('');
+      return;
+    }
+
+    // D\u0142ugi niezmieniony ci\u0105g: kontekst przy s\u0105siaduj\u0105cych zmianach,
+    // reszt\u0119 zwijamy do klikalnego separatora.
+    const head = isFirst ? 0 : CONTEXT_LINES;
+    const tail = isLast ? 0 : CONTEXT_LINES;
+
+    html += g.lines.slice(0, head).map(eqLine).join('');
+
+    const hidden = g.lines.slice(head, n - tail);
+    if (hidden.length > 0) {
+      skipped.push(hidden.map(eqLine).join(''));
+      html += `<span class="diff-skip" data-skip="${skipped.length - 1}" title="${t.skipTitle}" role="button" tabindex="0">\u22ef ${hidden.length} ${t.skipLines} \u22ef</span>`;
+    }
+
+    html += g.lines.slice(n - tail).map(eqLine).join('');
+  });
+
+  return { html, skipped, added, removed };
+}
+
+// Podpina rozwijanie zwini\u0119tych fragment\u00f3w (klik / Enter/Spacja).
+function wireSkipToggle(box, skipped) {
+  box.querySelectorAll('.diff-skip').forEach((el) => {
+    const expand = () => {
+      const idx = Number(el.dataset.skip);
+      el.insertAdjacentHTML('afterend', skipped[idx] || '');
+      el.remove();
+    };
+    el.addEventListener('click', expand);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        expand();
+      }
+    });
+  });
 }
 
 async function main() {
@@ -149,16 +241,16 @@ async function main() {
     return;
   }
 
-  // B2: otwieramy „otwieraną stronę" (site.openUrl) — URL monitorowany
-  // może być endpointem JSON, którego człowiek nie chce czytać surowy.
+  // B2: otwieramy "otwieran\u0105 stron\u0119" (site.openUrl) \u2014 URL monitorowany
+  // mo\u017ce by\u0107 endpointem JSON, kt\u00f3rego cz\u0142owiek nie chce czyta\u0107 surowy.
   const openUrl = site.openUrl || site.url;
   openEl.href = openUrl;
 
   document.getElementById('title').textContent = site.name;
   let metaText = site.changedAt
-    ? `${new Date(site.changedAt).toLocaleString()} • ${openUrl}`
+    ? `${new Date(site.changedAt).toLocaleString()} \u2022 ${openUrl}`
     : openUrl;
-  if (openUrl !== site.url) metaText += ` • ${t.monitoredUrl}: ${site.url}`;
+  if (openUrl !== site.url) metaText += ` \u2022 ${t.monitoredUrl}: ${site.url}`;
   document.getElementById('meta').textContent = metaText;
 
   if (!site.prevSnapshot && !site.lastSnapshot) {
@@ -172,8 +264,18 @@ async function main() {
 
   const oldLines = site.prevSnapshot.split('\n');
   const newLines = (site.lastSnapshot || '').split('\n');
-  const html = renderDiff(oldLines, newLines);
+  const { html, skipped, added, removed } = renderDiff(oldLines, newLines, t);
+
+  // Statystyki w pasku narz\u0119dzi: +dodane / \u2212usuni\u0119te.
+  const statsEl = document.getElementById('stats');
+  if (statsEl) {
+    statsEl.innerHTML =
+      `<span class="stat-add" title="${t.added}">+${added}</span>` +
+      `<span class="stat-del" title="${t.removed}">\u2212${removed}</span>`;
+  }
+
   box.innerHTML = html || `<span class="empty">${t.noChanges}</span>`;
+  wireSkipToggle(box, skipped);
 }
 
 main();
