@@ -236,6 +236,21 @@ const SNAPSHOT_BLOCK_TAGS = 'p|div|br|li|tr|td|th|section|article|header|footer|
 
 function cleanHtmlStructured(htmlText) {
   if (!htmlText) return '';
+
+  // B1: odpowiedzi JSON (monitorowane endpointy XHR) to jedna minifikowana
+  // linia — diff z niej byłby „ścianą tekstu". Pretty-print rozbija każdy
+  // klucz i wartość na osobną linię, dzięki czemu LCS ma co porównywać.
+  // Niepoprawny JSON spada do ścieżki HTML poniżej.
+  const trimmed = htmlText.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2)
+        .slice(0, SNAPSHOT_MAX_CHARS)
+        .trim();
+    } catch (e) {
+      // niepoprawny JSON — traktuj jak HTML
+    }
+  }
   let cleaned = htmlText.replace(/<!--[\s\S]*?-->/g, '');
   cleaned = cleaned.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '');
   cleaned = cleaned.replace(new RegExp(`<(${SNAPSHOT_BLOCK_TAGS})[^>]*>`, 'gi'), '\n');

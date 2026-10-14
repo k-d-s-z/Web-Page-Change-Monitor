@@ -1,10 +1,36 @@
-// Diff "przed → po" dla strony wskazanej w hashu URL (diff.html#<siteId>).
+// Diff „przed → po" dla strony wskazanej w hashu URL (diff.html#<siteId>).
 // Dane czytane bezpośrednio z chrome.storage.local — nie przechodzą przez
 // service worker, więc strona działa nawet gdy SW śpi.
 //
 // Algorytm: LCS na liniach (tani — setki/tysiące linii), a wewnątrz bloku
 // zmienionych linii ten sam LCS na słowach (krótkie ciągi) dla efektu
 // <del>stare</del><ins>nowe</ins> w obrębie jednej linii.
+//
+// B2: „Otwórz stronę" prowadzi do site.openUrl (URL monitorowany może być
+// endpointem JSON, nieczytelnym dla człowieka); w metadanych pokazujemy
+// oba URL-e, gdy się różnią. Strona tłumaczy się na PL/EN (D1) zgodnie
+// z językiem zapisanym w storage.
+
+const STR = {
+  en: {
+    title: 'Change details — Web Page Change Monitor',
+    openPage: 'Open page',
+    siteNotFound: 'Site not found.',
+    noVersionYet: 'No stored version of this page yet — the next detected change will show a full diff.',
+    onlyCurrent: 'Only the current version is stored (baseline saved after the update). The next detected change will show a diff.',
+    noChanges: 'No visible text changes.',
+    monitoredUrl: 'monitored'
+  },
+  pl: {
+    title: 'Szczegóły zmiany — Web Page Change Monitor',
+    openPage: 'Otwórz stronę',
+    siteNotFound: 'Nie znaleziono takiej strony.',
+    noVersionYet: 'Nie ma jeszcze zapisanej wersji tej strony — kolejna wykryta zmiana pokaże pełny diff.',
+    onlyCurrent: 'Zapisana jest tylko bieżąca wersja (baseline zapisany po aktualizacji). Kolejna wykryta zmiana pokaże diff.',
+    noChanges: 'Brak widocznych zmian treści.',
+    monitoredUrl: 'monitorowany'
+  }
+};
 
 function esc(s) {
   return (s || '').replace(/[&<>"]/g, (c) => ({
@@ -19,7 +45,7 @@ function computeOps(a, b) {
 
   // Zabezpieczenie przed O(n·m) na ogromnych zestawach (np. snapshot
   // ucięty do limitu 150k znaków może dać ~10k linii): zamiast zawiesić
-  // stronę, pokazujemy "wszystko wymienione" w blokach.
+  // stronę, pokazujemy „wszystko wymienione" w blokach.
   if (n * m > 4_000_000) {
     const ops = [];
     a.forEach((l) => ops.push({ t: 'del', l }));
@@ -66,6 +92,11 @@ function renderInline(oldLine, newLine) {
   return out.replace(/\s+$/, '');
 }
 
+function line(kind, inner, lineText) {
+  const cls = lineText ? `diff-line ${kind}` : 'diff-line empty';
+  return `<span class="${cls}">${inner || '\u00a0'}</span>`;
+}
+
 // Grupuje ciąg operacji nie-'eq' w bloki; blok z równą liczbą del/ins
 // (do 3 par) renderowany jest linia-po-linii inline (czytelny word-diff).
 function renderDiff(oldLines, newLines) {
@@ -75,7 +106,7 @@ function renderDiff(oldLines, newLines) {
 
   while (k < ops.length) {
     if (ops[k].t === 'eq') {
-      html += esc(ops[k].l) + '\n';
+      html += line('equivalent', esc(ops[k].l), ops[k].l);
       k++;
       continue;
     }
@@ -89,11 +120,11 @@ function renderDiff(oldLines, newLines) {
 
     if (dels.length === ins.length && dels.length > 0 && dels.length <= 3) {
       for (let p = 0; p < dels.length; p++) {
-        html += renderInline(dels[p].l, ins[p].l) + '\n';
+        html += line('changed', renderInline(dels[p].l, ins[p].l), dels[p].l);
       }
     } else {
-      dels.forEach((o) => { html += `<del>${esc(o.l)}</del>\n`; });
-      ins.forEach((o) => { html += `<ins>${esc(o.l)}</ins>\n`; });
+      dels.forEach((o) => { html += line('removed', `<del>${esc(o.l)}</del>`, o.l); });
+      ins.forEach((o) => { html += line('added', `<ins>${esc(o.l)}</ins>`, o.l); });
     }
   }
   return html;
@@ -101,34 +132,48 @@ function renderDiff(oldLines, newLines) {
 
 async function main() {
   const siteId = decodeURIComponent(location.hash.slice(1));
-  const { sites } = await chrome.storage.local.get('sites');
+  const { sites, language } = await chrome.storage.local.get(['sites', 'language']);
+  const t = language === 'pl' ? STR.pl : STR.en;
+
+  document.documentElement.lang = language === 'pl' ? 'pl' : 'en';
+  document.title = t.title;
+  document.getElementById('open-label').textContent = t.openPage;
+
   const site = (sites || []).find((s) => s.id === siteId);
 
   const box = document.getElementById('diff');
+  const openEl = document.getElementById('open');
   if (!site) {
-    box.innerHTML = '<span class="empty">Site not found.</span>';
+    openEl.style.display = 'none';
+    box.innerHTML = `<span class="empty">${t.siteNotFound}</span>`;
     return;
   }
 
+  // B2: otwieramy „otwieraną stronę" (site.openUrl) — URL monitorowany
+  // może być endpointem JSON, którego człowiek nie chce czytać surowy.
+  const openUrl = site.openUrl || site.url;
+  openEl.href = openUrl;
+
   document.getElementById('title').textContent = site.name;
-  document.getElementById('open').href = site.url;
-  document.getElementById('meta').textContent = site.changedAt
-    ? `${new Date(site.changedAt).toLocaleString()} • ${site.url}`
-    : site.url;
+  let metaText = site.changedAt
+    ? `${new Date(site.changedAt).toLocaleString()} • ${openUrl}`
+    : openUrl;
+  if (openUrl !== site.url) metaText += ` • ${t.monitoredUrl}: ${site.url}`;
+  document.getElementById('meta').textContent = metaText;
 
   if (!site.prevSnapshot && !site.lastSnapshot) {
-    box.innerHTML = '<span class="empty">No stored version of this page yet — the next detected change will show a full diff.</span>';
+    box.innerHTML = `<span class="empty">${t.noVersionYet}</span>`;
     return;
   }
   if (!site.prevSnapshot) {
-    box.innerHTML = '<span class="empty">Only the current version is stored (baseline saved after the update). The next detected change will show a diff.</span>';
+    box.innerHTML = `<span class="empty">${t.onlyCurrent}</span>`;
     return;
   }
 
   const oldLines = site.prevSnapshot.split('\n');
   const newLines = (site.lastSnapshot || '').split('\n');
   const html = renderDiff(oldLines, newLines);
-  box.innerHTML = html || '<span class="empty">No visible text changes.</span>';
+  box.innerHTML = html || `<span class="empty">${t.noChanges}</span>`;
 }
 
 main();

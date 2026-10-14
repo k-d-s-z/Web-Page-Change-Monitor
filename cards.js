@@ -31,9 +31,23 @@ const ICONS = {
   warning: '<svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
 };
 
+// I3: czas względny dla świeżych sprawdzeń („X min temu"), dokładna data
+// tylko dla starszych niż 24 h — użytkownik od razu widzi, jak „świeże"
+// jest ostatnie sprawdzenie, bez porównywania zegarka z etykietą.
 function formatLastCheck(timestamp) {
   const locale = currentLang === 'pl' ? 'pl-PL' : 'en-US';
+  const pl = currentLang === 'pl';
   const date = new Date(timestamp);
+  const diffMs = Date.now() - timestamp;
+
+  if (diffMs < 60_000) return pl ? 'właśnie teraz' : 'just now';
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return pl ? `${mins} min temu` : `${mins} min ago`;
+  if (mins < 24 * 60) {
+    const h = Math.floor(mins / 60);
+    return pl ? `${h} godz. temu` : (h === 1 ? '1 hour ago' : `${h} hours ago`);
+  }
+
   const sameDay = date.toDateString() === new Date().toDateString();
 
   return sameDay
@@ -60,8 +74,9 @@ function buildCard(site, flash = null) {
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
     : '';
-  // U1: link do podglądu zmian — widoczny tylko, gdy jest co pokazać.
-  const diffHtml = site.hasChanged && site.prevSnapshot
+  // U1: link do podglądu zmian — pokazywany zawsze, gdy istnieje poprzednia
+  // wersja snapshotu (nie znika po oznaczeniu zmiany jako odczytanej).
+  const diffHtml = site.prevSnapshot
     ? ` &bull; <a href="#" class="link-diff" title="${t.titleDiff}">${t.linkDiff}</a>`
     : '';
 
@@ -70,7 +85,7 @@ function buildCard(site, flash = null) {
 
   card.innerHTML = `
     <button type="button" class="drag-handle" title="${t.titleDrag}" aria-label="${t.titleDrag}"><svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="3.5" r="1.7"/><circle cx="10" cy="3.5" r="1.7"/><circle cx="4" cy="9" r="1.7"/><circle cx="10" cy="9" r="1.7"/><circle cx="4" cy="14.5" r="1.7"/><circle cx="10" cy="14.5" r="1.7"/></svg></button>
-    <div class="site-info">
+    <div class="site-info" tabindex="0" role="button" aria-label="${escapeHtml(site.name)}">
       <div class="site-name" title="${escapeHtml(site.name)}"><img class="site-favicon" src="${faviconUrl(site.url, 32)}" width="18" height="18" alt="" aria-hidden="true">${escapeHtml(site.name)}${pausedBadge}${badgeHtml}</div>
       <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${errorHtml}${flashHtml}${diffHtml}</div>
     </div>
@@ -131,6 +146,18 @@ function buildCard(site, flash = null) {
 
   card.addEventListener('keydown', onCardKeyDown);
 
+  // A1: Enter/Spacja na karcie (na .site-info) otwiera „otwieraną stronę"
+  // — dotąd obsługa klawiatury kończyła się na strzałkach z drag.js.
+  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnątrz.
+  card.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.target.closest('button, a, input, select, textarea')) return;
+    e.preventDefault();
+    chrome.tabs.create({ url: site.openUrl || site.url });
+    sendToBackground({ action: 'refreshSiteContent', siteId: site.id });
+    window.close();
+  });
+
   return card;
 }
 
@@ -181,6 +208,15 @@ function enterDeleteConfirm(card, site) {
     refreshCard(site.id);
   });
   noBtn.focus();
+
+  // A3: Escape anuluje potwierdzenie usuwania (karta i tak jest
+  // przebudowywana przez refreshCard, więc listener znika razem z nią).
+  card.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    e.preventDefault();
+    refreshCard(site.id);
+  });
 }
 
 async function renderSites() {

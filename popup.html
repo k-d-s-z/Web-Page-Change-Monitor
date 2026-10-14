@@ -130,17 +130,20 @@
       height: 26px;
       border-radius: 8px;
     }
-    /* Jeden rząd: język + eksport + import — równe szerokości i wysokości. */
+    /* Dwa rzędy: rząd 1 — przełącznik języka (pełna szerokość),
+       rząd 2 — kopia ustawień + przywracanie (równe szerokości). */
     .settings-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       align-items: stretch;
     }
-    .settings-actions > * {
-      flex: 1;
+    .settings-actions > button {
+      flex: 1 1 calc(50% - 4px);
       min-width: 0;
     }
     .lang-switcher {
+      flex: 1 1 100%;
       display: flex;
       gap: 4px;
       background: #121218;
@@ -148,6 +151,9 @@
       padding: 2px;
       border-radius: 10px;
       box-sizing: border-box;
+    }
+    .lang-switcher .lang-btn {
+      flex: 1;
     }
     .lang-btn {
       flex: 1;
@@ -277,9 +283,27 @@
       outline: 2px solid #8B5CF6;
       outline-offset: 1px;
     }
+    /* A2: pauza — karta w pełni czytelna (bez opacity na całości);
+       wyciszamy tylko nazwę i metadane oraz ramkę. Działa też z hover. */
     .site-card.paused {
-      opacity: 0.45;
       border-style: dashed;
+      border-color: #23232F;
+    }
+    .site-card.paused .site-name {
+      color: #9CA3AF;
+    }
+    .site-card.paused .site-meta {
+      color: #6B7280;
+    }
+    .site-card.paused:hover {
+      border-color: #3B3B4A;
+      background: #1F1F28;
+    }
+    .site-card.paused:hover .site-name {
+      color: #D1D5DB;
+    }
+    .site-card.paused:hover .site-meta {
+      color: #9CA3AF;
     }
     .site-card.dragging {
       opacity: 1;
@@ -332,6 +356,11 @@
       flex: 1;
       min-width: 0;
       cursor: pointer;
+    }
+    .site-info:focus-visible {
+      outline: 2px solid #8B5CF6;
+      outline-offset: 2px;
+      border-radius: 6px;
     }
     .site-name {
       font-weight: 700;
