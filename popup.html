@@ -7,7 +7,7 @@
       overflow-x: hidden;
     }
     body {
-      width: 520px;
+      width: 540px;
       margin: 0;
       padding: 12px;
       background-color: #09090E;
@@ -19,8 +19,9 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 10px;
       margin-bottom: 12px;
-      padding-bottom: 6px;
+      padding-bottom: 8px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     h2 {
@@ -38,22 +39,102 @@
     #form-title {
       margin-bottom: 12px;
     }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: #18181F;
+      border: 1px solid #2B2B36;
+      color: #E5E7EB;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0;
+    }
+    .icon-btn:hover {
+      color: #FFFFFF;
+      background: #23232F;
+      border-color: #3B3B4A;
+    }
+    .icon-btn:focus-visible {
+      outline: 2px solid #8B5CF6;
+      outline-offset: 1px;
+    }
+    .icon-btn.primary {
+      background: #8B5CF6;
+      border-color: #8B5CF6;
+      color: #FFFFFF;
+    }
+    .icon-btn.primary:hover {
+      background: #7C3AED;
+      border-color: #7C3AED;
+    }
+    .icon-btn.spinning {
+      animation: spin 0.9s linear infinite;
+    }
+    .settings-panel {
+      display: block;
+      background: rgba(24, 24, 31, 0.95);
+      border: 1px solid #2B2B36;
+      border-radius: 12px;
+      padding: 10px 12px 12px;
+      margin-bottom: 12px;
+      transition: all 0.2s ease;
+    }
+    .settings-panel.hidden {
+      display: none;
+    }
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      color: #F5F5F5;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .settings-section {
+      margin-bottom: 10px;
+    }
+    .settings-section:last-child {
+      margin-bottom: 0;
+    }
+    .settings-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #9CA3AF;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
     .lang-switcher {
       display: flex;
-      gap: 2px;
+      gap: 4px;
       background: #121218;
       border: 1px solid #23232F;
       padding: 2px;
-      border-radius: 16px;
+      border-radius: 12px;
+      width: fit-content;
     }
     .lang-btn {
       background: transparent;
       border: none;
       color: #9CA3AF;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 12px;
+      padding: 6px 10px;
+      border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
@@ -63,6 +144,13 @@
     .lang-btn.active {
       background: #8B5CF6;
       color: #FFFFFF;
+    }
+    .settings-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .settings-actions .btn-secondary {
+      flex: 1;
     }
     .btn-main {
       width: 100%;
@@ -98,33 +186,9 @@
       background: #23232F;
       color: #FFFFFF;
     }
-    .list-footer {
-      position: sticky;
-      bottom: 0;
-      z-index: 3;
-      margin: 8px -12px -12px;
-      padding: 8px 12px 12px;
-      background: rgba(9, 9, 14, 0.95);
-      backdrop-filter: blur(8px);
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .btn-row {
-      display: flex;
-      gap: 8px;
-    }
-    .btn-row .btn-main {
-      flex: 1;
-      width: auto;
-      margin-bottom: 0;
-    }
-    .btn-sub-row {
-      display: flex;
-      gap: 6px;
-      margin-top: 6px;
-    }
     .btn-secondary {
       flex: 1;
-      padding: 6px;
+      padding: 7px 8px;
       background: #18181F;
       border: 1px solid #2B2B36;
       color: #E5E7EB;
@@ -132,8 +196,8 @@
       font-size: 11px;
       font-weight: 600;
       cursor: pointer;
-      text-align: center;
       transition: all 0.2s ease;
+      text-align: center;
     }
     .btn-secondary:hover {
       color: #FFFFFF;
@@ -144,10 +208,21 @@
       outline: 2px solid #8B5CF6;
       outline-offset: 1px;
     }
+    .list-footer {
+      position: sticky;
+      bottom: 0;
+      z-index: 3;
+      margin: 8px -12px -12px;
+      padding: 8px 12px 12px;
+      background: rgba(9, 9, 14, 0.95);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
     .refresh-summary {
-      font-size: 10px;
+      font-size: 11px;
       color: #9CA3AF;
       margin-bottom: 6px;
+      min-height: 14px;
     }
     .refresh-summary:empty {
       display: none;
@@ -257,9 +332,9 @@
     }
     .site-meta {
       font-size: 12px;
-      color: #9CA3AF;
+      color: #C7CED6;
       margin-top: 3px;
-      line-height: 1.3;
+      line-height: 1.45;
     }
     .icon-inline {
       vertical-align: -1px;
@@ -377,7 +452,7 @@
     }
     .hint, .field-hint {
       font-size: 11px;
-      color: #6B7280;
+      color: #7A818D;
       margin-top: 3px;
     }
     .hint { text-align: center; }
@@ -406,7 +481,7 @@
     .empty-state {
       text-align: center;
       padding: 24px 8px;
-      color: #6B7280;
+      color: #9CA3AF;
       font-size: 12px;
       line-height: 1.6;
     }
@@ -431,7 +506,7 @@
       border-radius: 6px;
       box-sizing: border-box;
       font-family: inherit;
-      font-size: 11px;
+      font-size: 12px;
       transition: all 0.2s ease;
     }
     input:focus, select:focus {
@@ -447,8 +522,8 @@
     .checkbox-label {
       display: flex;
       align-items: flex-start;
-      font-size: 11px;
-      color: #9CA3AF;
+      font-size: 12px;
+      color: #E5E7EB;
       margin-bottom: 10px;
       cursor: pointer;
     }
@@ -462,7 +537,7 @@
       color: #F3F4F6;
       border-radius: 6px;
       padding: 6px 10px;
-      font-size: 10px;
+      font-size: 11px;
       margin-bottom: 10px;
     }
     .form-message.warn {
@@ -481,23 +556,41 @@
         <span data-i18n="titleList">Monitored Pages</span>
         <span id="site-count-badge" class="counter-badge">(0/50)</span>
       </h2>
-      <div class="lang-switcher">
-        <button class="lang-btn" data-lang="en">EN</button>
-        <button class="lang-btn" data-lang="pl">PL</button>
+      <div class="header-actions">
+        <button id="btn-settings" class="icon-btn" type="button" aria-label="Settings" title="Settings">
+          <span aria-hidden="true">⚙️</span>
+        </button>
+        <button id="btn-refresh-all" class="icon-btn primary" type="button" data-i18n="btnRefreshAll" aria-label="Refresh all" title="Refresh all">↻</button>
+        <button id="btn-add-view" class="icon-btn primary" type="button" data-i18n="btnAdd" aria-label="Add New Page" title="Add New Page">＋</button>
       </div>
     </div>
+
+    <div id="settings-panel" class="settings-panel hidden" aria-live="polite">
+      <div class="settings-header">
+        <span>Settings</span>
+        <button id="btn-close-settings" class="icon-btn" type="button" aria-label="Close settings" title="Close settings">✕</button>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-label">Language</label>
+        <div class="lang-switcher" role="group" aria-label="Select language">
+          <button class="lang-btn active" type="button" data-lang="en">EN</button>
+          <button class="lang-btn" type="button" data-lang="pl">PL</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-actions">
+          <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Create Backup</button>
+          <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Restore Backup</button>
+        </div>
+        <input type="file" id="restore-file-input" accept=".json,application/json" style="display: none;">
+      </div>
+    </div>
+
     <div id="sites-container"></div>
     <div class="list-footer">
       <div id="refresh-summary" class="refresh-summary" role="status" aria-live="polite"></div>
-      <div class="btn-row">
-        <button id="btn-refresh-all" class="btn-main" data-i18n="btnRefreshAll">Refresh all</button>
-        <button id="btn-add-view" class="btn-main" data-i18n="btnAdd">+ Add New Page</button>
-      </div>
-      <div class="btn-sub-row">
-        <button id="btn-backup" class="btn-secondary" data-i18n="btnBackup">Create Backup</button>
-        <button id="btn-restore" class="btn-secondary" data-i18n="btnRestore">Restore Backup</button>
-        <input type="file" id="restore-file-input" accept=".json,application/json" style="display: none;">
-      </div>
     </div>
   </div>
 
