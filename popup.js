@@ -27,6 +27,15 @@ function toggleSettingsPanel(forceOpen = null) {
   if (btn) btn.setAttribute('aria-expanded', String(shouldOpen));
 }
 
+// Applies the color theme and highlights the matching switcher button.
+function applyTheme(theme) {
+  const value = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = value;
+  document.querySelectorAll('.theme-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.theme === value);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const data = await chrome.storage.local.get('language');
   currentLang = data.language || detectLanguage();
@@ -54,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearFormMessage();
   });
 
-  document.querySelectorAll('.lang-btn').forEach((btn) => {
+  document.querySelectorAll('.lang-btn[data-lang]').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       currentLang = e.currentTarget.getAttribute('data-lang');
       await chrome.storage.local.set({ language: currentLang });
@@ -64,6 +73,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+
+  // Theme (K2 follow-up): light/dark palette switch, stored in storage.
+  const storedTheme = await chrome.storage.local.get('theme');
+  applyTheme(storedTheme.theme);
+  document.querySelectorAll('.theme-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const theme = btn.dataset.theme === 'light' ? 'light' : 'dark';
+      await chrome.storage.local.set({ theme });
+      applyTheme(theme);
+    });
+  });
   initDragAndDrop(document.getElementById('sites-container'));
 });
 
@@ -99,8 +119,8 @@ async function triggerCheck(siteId) {
   await refreshCard(siteId, flashFromResult(result));
 }
 
-// Ikona przycisku to SVG w HTML — NIE nadpisujemy textContent (kasowałoby
-// SVG). Aktualizujemy tylko stan, tytuł i aria-label.
+// Button icon is inline SVG in HTML - do NOT overwrite textContent (it would
+// wipe the SVG). Only update state, title and aria-label.
 function updateRefreshAllButton() {
   const btn = document.getElementById('btn-refresh-all');
   if (!btn) return;
@@ -131,7 +151,7 @@ function clearSummary() {
 function progressText() {
   const t = TRANSLATIONS[currentLang];
   const done = refreshTracker.total - refreshTracker.pending.size;
-  return `${t.summaryProgress} ${done}/${refreshTracker.total}…`;
+  return `${t.summaryProgress} ${done}/${refreshTracker.total}\u2026`;
 }
 
 function setCardChecking(siteId) {
@@ -191,7 +211,7 @@ async function refreshAll() {
     return;
   }
   const checked = res.total - res.skipped;
-  const text = `${t.summaryRefreshed}: ${checked} • ${t.summaryChanges}: ${res.changed} • ${t.summaryErrors}: ${res.errors}`;
+  const text = `${t.summaryRefreshed}: ${checked} \u2022 ${t.summaryChanges}: ${res.changed} \u2022 ${t.summaryErrors}: ${res.errors}`;
   showSummary(text, res.changed > 0 || res.errors > 0 ? 'warn' : 'ok', SUMMARY_HIDE_MS);
 }
 
@@ -238,6 +258,13 @@ async function restoreBackup(e) {
 
   const t = TRANSLATIONS[currentLang];
 
+  // Limit rozmiaru pliku kopii (2 MB) - zanim wczytamy caly plik do pamieci.
+  if (file.size > 2 * 1024 * 1024) {
+    showSummary(t.restoreTooBig, 'warn', SUMMARY_HIDE_MS);
+    e.target.value = '';
+    return;
+  }
+
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
@@ -276,8 +303,8 @@ async function restoreBackup(e) {
 
     const parts = [`${t.restoreAdded}: ${res.addedCount}`];
     if (res.skippedCount) parts.push(`${t.restoreSkipped}: ${res.skippedCount}${skipReasonDetail(res.skippedByReason, t)}`);
-    let text2 = parts.join(' • ');
-    if (permissionPending) text2 += ` — ${t.restorePermissionPending}`;
+    let text2 = parts.join(' \u2022 ');
+    if (permissionPending) text2 += ` \u2014 ${t.restorePermissionPending}`;
     showSummary(text2, permissionPending ? 'warn' : 'ok', SUMMARY_HIDE_MS * 2);
 
     if (!permissionPending && Array.isArray(res.addedIds) && res.addedIds.length > 0) {
@@ -340,8 +367,8 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-id').value = site.id;
     document.getElementById('site-name').value = site.name;
     document.getElementById('site-url').value = site.url;
-    // "Otwierana strona": pokazujemy tylko, gdy różni się od monitorowanego
-    // (nie zaśmiecamy pola kopią URL przy zwykłej edycji).
+    // "Opened page": show only when it differs from the monitored URL
+    // (no need to clutter the field with a URL copy during plain edits).
     document.getElementById('site-openurl').value =
       (site.openUrl && site.openUrl !== site.url) ? site.openUrl : '';
     document.getElementById('site-freq').value = site.freqIndex;

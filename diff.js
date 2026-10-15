@@ -30,7 +30,8 @@ const STR = {
     skipLines: 'unchanged lines',
     skipTitle: 'Click to show these lines',
     added: 'added',
-    removed: 'removed'
+    removed: 'removed',
+    onlyChanges: 'Only changes'
   },
   pl: {
     title: 'Szczeg\u00f3\u0142y zmiany \u2014 Web Page Change Monitor',
@@ -43,7 +44,8 @@ const STR = {
     skipLines: 'niezmienionych linii',
     skipTitle: 'Kliknij, aby pokaza\u0107 te linie',
     added: 'dodane',
-    removed: 'usuni\u0119te'
+    removed: 'usuni\u0119te',
+    onlyChanges: 'Tylko zmiany'
   }
 };
 
@@ -151,9 +153,8 @@ function renderChangeBlock(block) {
   }
   return html;
 }
-
 // Renderuje diff ze zwijaniem: zwraca { html, skipped, added, removed }.
-function renderDiff(oldLines, newLines, t) {
+function renderDiff(oldLines, newLines, t, onlyChanges) {
   const ops = computeOps(oldLines, newLines);
   const groups = groupOps(ops);
 
@@ -176,6 +177,10 @@ function renderDiff(oldLines, newLines, t) {
       return;
     }
 
+
+    // Tryb "tylko zmiany": pomijamy wszystkie niezmienione linie -
+    // zostaj\u0105 wy\u0142\u0105cznie bloki +/\u2212 (realne zmiany).
+    if (onlyChanges) return;
     const isFirst = gi === 0;
     const isLast = gi === groups.length - 1;
     const n = g.lines.length;
@@ -224,12 +229,14 @@ function wireSkipToggle(box, skipped) {
 
 async function main() {
   const siteId = decodeURIComponent(location.hash.slice(1));
-  const { sites, language } = await chrome.storage.local.get(['sites', 'language']);
+  const { sites, language, theme } = await chrome.storage.local.get(['sites', 'language', 'theme']);
   const t = language === 'pl' ? STR.pl : STR.en;
 
   document.documentElement.lang = language === 'pl' ? 'pl' : 'en';
+  document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
   document.title = t.title;
   document.getElementById('open-label').textContent = t.openPage;
+  document.getElementById('only-changes-label').textContent = t.onlyChanges;
 
   const site = (sites || []).find((s) => s.id === siteId);
 
@@ -264,18 +271,30 @@ async function main() {
 
   const oldLines = site.prevSnapshot.split('\n');
   const newLines = (site.lastSnapshot || '').split('\n');
-  const { html, skipped, added, removed } = renderDiff(oldLines, newLines, t);
 
-  // Statystyki w pasku narz\u0119dzi: +dodane / \u2212usuni\u0119te.
+  // Przelacznik "tylko zmiany" w pasku narzedzi: ukrywa wszystkie
+  // niezmienione linie, zostawia wylacznie bloki +/- (realne zmiany).
+  // Przerenderowuje widok bez przeladowania strony.
   const statsEl = document.getElementById('stats');
-  if (statsEl) {
-    statsEl.innerHTML =
-      `<span class="stat-add" title="${t.added}">+${added}</span>` +
-      `<span class="stat-del" title="${t.removed}">\u2212${removed}</span>`;
-  }
+  const render = (onlyChanges) => {
+    const { html, skipped, added, removed } = renderDiff(oldLines, newLines, t, onlyChanges);
 
-  box.innerHTML = html || `<span class="empty">${t.noChanges}</span>`;
-  wireSkipToggle(box, skipped);
+    // Statystyki w pasku narzedzi: +dodane / -usuniete.
+    if (statsEl) {
+      statsEl.innerHTML =
+        `<span class="stat-add" title="${t.added}">+${added}</span>` +
+        `<span class="stat-del" title="${t.removed}">\u2212${removed}</span>`;
+    }
+
+    box.innerHTML = html || `<span class="empty">${t.noChanges}</span>`;
+    wireSkipToggle(box, skipped);
+  };
+
+  const onlyEl = document.getElementById('only-changes');
+  if (onlyEl) {
+    onlyEl.addEventListener('change', () => render(onlyEl.checked));
+  }
+  render(false);
 }
 
 main();

@@ -166,17 +166,24 @@ function findCard(siteId) {
   return Array.from(document.querySelectorAll('.site-card')).find((c) => c.dataset.id === siteId) || null;
 }
 
+// Screen-reader announcements: buildCard() replaces the whole card node,
+// so per-card aria-live regions are recreated with content (SRs do not
+// announce those). Announce status changes in ONE persistent live region.
+function announce(text) {
+  const live = document.getElementById("sr-live");
+  if (!live || !text) return;
+  live.textContent = "";
+  requestAnimationFrame(() => { live.textContent = text; });
+}
+
 async function refreshCard(siteId, flash = null) {
   const data = await chrome.storage.local.get('sites');
   const site = (data.sites || []).find((s) => s.id === siteId);
   const card = findCard(siteId);
   if (!card || card.classList.contains('dragging')) return;
 
-  if (!site) {
-    card.remove();
-    return;
-  }
   card.replaceWith(buildCard(site, flash));
+  if (flash && flash.text) announce(flash.text);
 }
 
 function enterDeleteConfirm(card, site) {
