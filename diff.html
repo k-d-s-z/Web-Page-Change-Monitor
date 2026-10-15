@@ -47,6 +47,11 @@
     [data-theme="light"] .diff-skip { background: rgba(0, 0, 0, 0.04); }
     [data-theme="light"] ins,
     [data-theme="light"] del { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.10); }
+    /* Default ins/del/h1 colors are pale (made for the dark theme) and vanish
+       on a light background - give them dark, readable colors in light mode. */
+    [data-theme="light"] ins { color: #065F46; }
+    [data-theme="light"] del { color: #991B1B; }
+    [data-theme="light"] h1 { color: var(--text); }
     [data-theme="light"] .diff {
       background: linear-gradient(180deg, rgba(0, 0, 0, 0.015), rgba(0, 0, 0, 0));
     }

@@ -5,8 +5,12 @@
   <style>
     /* K2: CSS color variables - single place for the palette (foundation
        for a future light mode). K1: --brand (violet) = actions; statuses:
-       --warn (change detected / NEW), --ok (info/success), --danger. */
+       --warn (change detected / NEW), --ok (info/success), --danger.
+       --white = text/icons on saturated (violet) surfaces in BOTH themes;
+       --text-strong = emphasized text on theme surfaces (white in dark,
+       near-black in light). */
     :root {
+      color-scheme: dark;
       --bg: #09090E;
       --bg-card: #18181F;
       --bg-soft: #23232F;
@@ -18,6 +22,7 @@
       --text-soft: #E5E7EB;
       --text-heading: #F5F5F5;
       --white: #FFFFFF;
+      --text-strong: #FFFFFF;
       --text-2: #9CA3AF;
       --text-3: #D1D5DB;
       --text-meta: #C7CED6;
@@ -33,8 +38,8 @@
     }
 
     /* Light mode: only the palette changes - every rule keeps its var() refs.
-       Hover states that painted white text now need dark text on light
-       surfaces. */
+       Text that is white in dark mode uses --text-strong, so it turns
+       near-black here; --white stays white for text on violet buttons. */
     [data-theme="light"] {
       color-scheme: light;
       --bg: #F6F7F9;
@@ -47,26 +52,32 @@
       --text: #1F2328;
       --text-soft: #2F3540;
       --text-heading: #14171B;
+      --text-strong: #14171B;
       --text-2: #5B6470;
       --text-3: #3D434C;
       --text-meta: #4A5158;
-      --text-muted: #79818B;
+      --text-muted: #6B7280;
       --brand: #7C3AED;
       --brand-hover: #6D28D9;
       --brand-soft: #7C3AED;
       --brand-softer: #6D28D9;
-      --ok: #059669;
+      --ok: #047857;
       --warn: #B45309;
       --danger: #DC2626;
       --scrollbar-thumb: #C4CAD2;
     }
-    [data-theme="light"] .icon-btn:hover,
-    [data-theme="light"] .lang-btn:hover,
-    [data-theme="light"] .btn-secondary:hover,
-    [data-theme="light"] .btn-cancel:hover,
-    [data-theme="light"] .drag-handle:hover,
-    [data-theme="light"] .drag-handle:focus-visible {
-      color: #14171B;
+    /* Light mode: surfaces that were hard-coded for the dark theme. */
+    [data-theme="light"] .header-bar {
+      border-bottom-color: var(--border);
+    }
+    [data-theme="light"] .list-footer {
+      background: rgba(246, 247, 249, 0.95);
+      border-top-color: var(--border);
+    }
+    [data-theme="light"] .btn-delete:hover {
+      color: #B91C1C;
+      background: #FEE2E2;
+      border-color: rgba(185, 28, 28, 0.35);
     }
     html {
       overflow-x: hidden;
@@ -93,7 +104,7 @@
       margin: 0;
       font-size: 16px;
       font-weight: 700;
-      color: var(--white);
+      color: var(--text-strong);
     }
     .counter-badge {
       font-size: 12px;
@@ -129,7 +140,7 @@
       pointer-events: none;
     }
     .icon-btn:hover {
-      color: var(--white);
+      color: var(--text-strong);
       background: var(--bg-soft);
       border-color: var(--border-strong);
     }
@@ -246,7 +257,7 @@
       transition: all 0.2s ease;
     }
     .lang-btn:hover {
-      color: var(--white);
+      color: var(--text-strong);
     }
     .lang-btn.active {
       background: var(--brand-hover);
@@ -270,7 +281,7 @@
       box-sizing: border-box;
     }
     .btn-secondary:hover {
-      color: var(--white);
+      color: var(--text-strong);
       background: var(--bg-soft);
       border-color: var(--border-strong);
     }
@@ -310,7 +321,7 @@
     }
     .btn-cancel:hover {
       background: var(--bg-soft);
-      color: var(--white);
+      color: var(--text-strong);
     }
     .list-footer {
       position: sticky;
@@ -417,13 +428,13 @@
       transition: all 0.2s ease;
     }
     .drag-handle:hover {
-      color: var(--white);
+      color: var(--text-strong);
       background: var(--border);
     }
     .drag-handle:focus-visible {
       outline: 2px solid var(--brand);
       outline-offset: 1px;
-      color: var(--white);
+      color: var(--text-strong);
     }
     .drag-handle svg {
       pointer-events: none;
@@ -443,7 +454,7 @@
     .site-name {
       font-weight: 700;
       font-size: 14px;
-      color: var(--white);
+      color: var(--text-strong);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -519,7 +530,7 @@
       display: inline-flex;
     }
     .btn-icon:hover {
-      color: var(--white);
+      color: var(--text-strong);
       border-color: var(--border-strong);
       background: var(--border);
     }
@@ -587,7 +598,7 @@
     .hint { text-align: center; }
     .badge-changed {
       background: var(--warn);
-      color: var(--white);
+      color: #1F1F28; /* dark text: white on the amber dark-theme --warn is unreadable */
       font-size: 9px;
       font-weight: 700;
       padding: 2px 6px;
@@ -596,6 +607,7 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+    [data-theme="light"] .badge-changed { color: var(--white); }
     .badge-paused {
       background: var(--scrollbar-thumb);
       color: var(--text-soft);
@@ -631,7 +643,7 @@
       padding: 8px 10px;
       background: var(--bg-card);
       border: 1px solid var(--border);
-      color: var(--white);
+      color: var(--text-strong);
       border-radius: 6px;
       box-sizing: border-box;
       font-family: inherit;
@@ -760,12 +772,12 @@
   <div id="view-form" style="display: none;">
     <h2 id="form-title" data-i18n="titleAdd">Add Page</h2>
     <input type="hidden" id="site-id">
-    
+
     <div class="form-group">
       <label data-i18n="lblSiteName">Name</label>
       <input type="text" id="site-name" maxlength="100" placeholder="e.g. News / Store">
     </div>
-    
+
     <div class="form-group">
       <label data-i18n="lblSiteUrl">URL Address</label>
       <input type="text" id="site-url" placeholder="https://...">
@@ -777,7 +789,7 @@
       <input type="text" id="site-openurl" placeholder="https://...">
       <div class="field-hint" data-i18n="hintOpenUrl">Opened when you click the card or notification.</div>
     </div>
-    
+
     <div class="form-group">
       <label data-i18n="lblFreq">Check Frequency</label>
       <select id="site-freq">
