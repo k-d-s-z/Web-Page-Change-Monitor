@@ -31,7 +31,8 @@ const STR = {
     skipTitle: 'Click to show these lines',
     added: 'added',
     removed: 'removed',
-    onlyChanges: 'Only changes'
+    onlyChanges: 'Only changes',
+    jumpToChanges: 'Jump to changes',
   },
   pl: {
     title: 'Szczeg\u00f3\u0142y zmiany \u2014 Web Page Change Monitor',
@@ -45,7 +46,8 @@ const STR = {
     skipTitle: 'Kliknij, aby pokaza\u0107 te linie',
     added: 'dodane',
     removed: 'usuni\u0119te',
-    onlyChanges: 'Tylko zmiany'
+    onlyChanges: 'Tylko zmiany',
+    jumpToChanges: 'Przejd\u017a do zmian',
   }
 };
 
@@ -294,7 +296,20 @@ async function main() {
   if (onlyEl) {
     onlyEl.addEventListener('change', () => render(onlyEl.checked));
   }
+  // D2: "Jump to changes" - skip long unchanged context before the first edit.
+  const jumpEl = document.getElementById('jump');
+  if (jumpEl) {
+    jumpEl.textContent = t.jumpToChanges;
+    const hasChanges = () => box.querySelector('.diff-line.added, .diff-line.removed');
+    jumpEl.hidden = !hasChanges();
+    jumpEl.addEventListener('click', () => {
+      const first = box.querySelector('.diff-line.added, .diff-line.removed');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      jumpEl.hidden = true;
+    });
+  }
   render(false);
 }
+
 
 main();
