@@ -77,6 +77,11 @@ function buildCard(site, flash = null) {
   // U1: link do podgl\u0105du zmian \u2014 widoczny tylko przy NIEODCZYTANEJ zmianie.
   // Klikni\u0119cie otwiera diff i czy\u015bci hasChanged (refreshSiteContent),
   // wi\u0119c po obejrzeniu zmian przycisk znika.
+  // Heuristic flag: the page shell is large but readable text is tiny ->
+  // suggest switching to rendered mode (JS draws the content).
+  const suggestHtml = site.suggestRendered
+    ? ` &bull; <span class="meta-flash warn">${t.suggestRendered}</span>`
+    : '';
   const diffHtml = site.hasChanged && site.prevSnapshot
     ? ` &bull; <a href="#" class="link-diff" title="${t.titleDiff}">${t.linkDiff}</a>`
     : '';
@@ -88,7 +93,7 @@ function buildCard(site, flash = null) {
     <button type="button" class="drag-handle" title="${t.titleDrag}" aria-label="${t.titleDrag}"><svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="3.5" r="1.7"/><circle cx="10" cy="3.5" r="1.7"/><circle cx="4" cy="9" r="1.7"/><circle cx="10" cy="9" r="1.7"/><circle cx="4" cy="14.5" r="1.7"/><circle cx="10" cy="14.5" r="1.7"/></svg></button>
     <div class="site-info" tabindex="0" role="button" aria-label="${escapeHtml(site.name)}">
       <div class="site-name" title="${escapeHtml(site.name)}"><img class="site-favicon" src="${faviconUrl(site.url, 32)}" width="18" height="18" alt="" aria-hidden="true">${escapeHtml(site.name)}${pausedBadge}${badgeHtml}</div>
-      <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${errorHtml}${flashHtml}${diffHtml}</div>
+      <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${errorHtml}${flashHtml}${suggestHtml}${diffHtml}</div>
     </div>
     <div class="actions">
       <button class="btn-icon btn-refresh${isChecking ? ' spinning' : ''}" title="${t.titleRefresh}" aria-label="${t.titleRefresh}"${refreshDisabled ? ' disabled' : ''}><span class="icon">${ICONS.refresh}</span></button>
@@ -246,7 +251,20 @@ async function renderSites() {
     return;
   }
 
-  container.replaceChildren(...sites.map((site) => buildCard(site)));
+  // I5: "changed only" filter (toggled from the batch summary). The count
+  // badge still shows the real total.
+  const visible = changedOnly ? sites.filter((s) => s.hasChanged) : sites;
+
+  if (changedOnly && visible.length === 0) {
+    const emptyEl = document.createElement('div');
+    emptyEl.className = 'empty-state';
+    emptyEl.textContent = TRANSLATIONS[currentLang].emptyFiltered;
+    container.replaceChildren(emptyEl);
+    updateRefreshAllButton();
+    return;
+  }
+
+  container.replaceChildren(...visible.map((site) => buildCard(site)));
 
   activeSiteCount = sites.filter((s) => !s.isPaused).length;
   updateRefreshAllButton();

@@ -15,6 +15,7 @@ let pendingHttpConfirm = null;
 let isRefreshingAll = false;
 let refreshTracker = null;
 let activeSiteCount = 0;
+let changedOnly = false; // I5: "changed only" list filter (toggle from batch summary)
 let summaryTimer = null;
 
 function toggleSettingsPanel(forceOpen = null) {
@@ -148,6 +149,28 @@ function clearSummary() {
   box.className = 'refresh-summary';
 }
 
+
+// Summary built from DOM nodes (no string HTML) - safe for site names.
+function summaryText(text) {
+  return document.createTextNode(text);
+}
+
+function summaryButton(label, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'summary-link';
+  btn.textContent = label;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function showSummaryNodes(parts, kind = '', autoHideMs = 0) {
+  const box = document.getElementById('refresh-summary');
+  clearTimeout(summaryTimer);
+  box.replaceChildren(...parts);
+  box.className = `refresh-summary${kind ? ' ' + kind : ''}`;
+  if (autoHideMs) summaryTimer = setTimeout(clearSummary, autoHideMs);
+}
 function progressText() {
   const t = TRANSLATIONS[currentLang];
   const done = refreshTracker.total - refreshTracker.pending.size;
@@ -212,7 +235,34 @@ async function refreshAll() {
   }
   const checked = res.total - res.skipped;
   const text = `${t.summaryRefreshed}: ${checked} \u2022 ${t.summaryChanges}: ${res.changed} \u2022 ${t.summaryErrors}: ${res.errors}`;
-  showSummary(text, res.changed > 0 || res.errors > 0 ? 'warn' : 'ok', SUMMARY_HIDE_MS);
+
+  // I5: link the batch summary to results - one click filters the list
+  // down to changed pages.
+  if (res.changed > 0) {
+    showSummaryNodes([
+      summaryText(`${text} \u2022 `),
+      summaryButton(t.showChanged, async () => {
+        changedOnly = true;
+        await renderSites();
+        showFilterSummary();
+      })
+    ], 'warn', SUMMARY_HIDE_MS * 3);
+  } else {
+    showSummary(text, res.changed > 0 || res.errors > 0 ? 'warn' : 'ok', SUMMARY_HIDE_MS);
+  }
+}
+
+// I5: summary shown while the "changed only" filter is active.
+function showFilterSummary() {
+  const t = TRANSLATIONS[currentLang];
+  showSummaryNodes([
+    summaryText(`${t.filterChanged} \u2022 `),
+    summaryButton(t.clearFilter, async () => {
+      changedOnly = false;
+      await renderSites();
+      clearSummary();
+    })
+  ], 'warn', 0);
 }
 
 async function createBackup() {
@@ -375,6 +425,7 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-ignore-dates').checked = site.ignoreDates !== false;
     document.getElementById('site-cookies').checked = site.requireCookies !== false;
     document.getElementById('site-notifications').checked = site.enableNotifications !== false;
+    document.getElementById('site-rendered').checked = site.renderMode === 'rendered';
   } else {
     document.getElementById('form-title').innerText = t.titleAdd;
     document.getElementById('site-id').value = '';
@@ -385,6 +436,7 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-ignore-dates').checked = true;
     document.getElementById('site-cookies').checked = false;
     document.getElementById('site-notifications').checked = true;
+    document.getElementById('site-rendered').checked = false;
   }
 
   if (prefill) {
@@ -422,6 +474,7 @@ async function saveSite() {
   const ignoreDates = document.getElementById('site-ignore-dates').checked;
   const requireCookies = document.getElementById('site-cookies').checked;
   const enableNotifications = document.getElementById('site-notifications').checked;
+  const renderMode = document.getElementById('site-rendered').checked ? 'rendered' : 'fast';
 
   if (!name || !url) {
     showFormMessage(t.alertFillFields);
@@ -453,7 +506,7 @@ async function saveSite() {
 
   const res = await callBackground({
     action: 'saveSite',
-    site: { id, name, url, openUrl, freqIndex, ignoreDates, requireCookies, enableNotifications }
+    site: { id, name, url, openUrl, freqIndex, ignoreDates, requireCookies, enableNotifications, renderMode }
   });
 
   if (!res.ok) {
@@ -488,6 +541,37 @@ async function togglePause(siteId) {
 
 async function deleteSite(siteId) {
   checkingIds.delete(siteId);
+
+  // I2: keep the full record in RAM so the summary can offer UNDO.
+  const data = await chrome.storage.local.get('sites');
+  const idx = (data.sites || []).findIndex((s) => s.id === siteId);
+  const site = idx !== -1 ? data.sites[idx] : null;
+
   await callBackground({ action: 'deleteSite', siteId });
   renderSites();
+  if (site) showUndoSummary(site, idx);
+}
+
+// I2: "Deleted: <name> - [Undo]". Restore reuses the original record
+// (with snapshots and change state) via the background 'undoDelete' action.
+function showUndoSummary(site, index) {
+  const t = TRANSLATIONS[currentLang];
+  showSummaryNodes([
+    summaryText(`${t.deletedSummary}: `),
+    summaryText(site.name),
+    summaryText(` \u2022 `),
+    summaryButton(t.undoDelete, async () => {
+      const res = await callBackground({ action: 'undoDelete', site, index });
+      if (!res.ok) {
+        showSummary(t.undoFailed, 'warn', SUMMARY_HIDE_MS);
+        return;
+      }
+      if (res.origins && res.origins.length > 0) {
+        try { await chrome.permissions.request({ origins: res.origins }); } catch (e) { /* best effort */ }
+      }
+      changedOnly = false;
+      await renderSites();
+      showSummary(t.undoDone, 'ok', SUMMARY_HIDE_MS);
+    })
+  ], 'warn', SUMMARY_HIDE_MS * 3);
 }

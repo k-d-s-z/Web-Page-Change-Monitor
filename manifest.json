@@ -10,6 +10,8 @@
     "alarms",
     "notifications",
     "contextMenus",
+    "scripting",
+    "tabs",
     "favicon"
   ],
   "optional_host_permissions": [

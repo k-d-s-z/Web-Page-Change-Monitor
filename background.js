@@ -6,6 +6,8 @@ const CHECK_ALL_CONCURRENCY = 3;
 const NOTIFICATION_PREFIX = 'change_';
 const HASH_MODE = 'v4';
 const SNAPSHOT_MAX_CHARS = 150000;
+const RENDER_LOAD_TIMEOUT_MS = 30000;
+const RENDER_GRACE_MS = 2500;
 
 let storageQueue = Promise.resolve();
 function withStorageLock(task) {
@@ -27,7 +29,7 @@ chrome.runtime.onStartup.addListener(async () => {
   await updateContextMenu();
 });
 
-// Odświeżamy tytuł pozycji menu przy zmianie języka w popupie, żeby był
+// Od\u015bwie\u017camy tytu\u0142 pozycji menu przy zmianie j\u0119zyka w popupie, \u017ceby by\u0142
 // aktualny nawet bez ponownego uruchamiania rozszerzenia.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.language) {
@@ -38,7 +40,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 const CONTEXT_MENU_MONITOR_ID = 'monitor-this-page';
 
 function contextMenuTitle(lang) {
-  return lang === 'pl' ? 'Monitoruj stronę' : 'Monitor this page';
+  return lang === 'pl' ? 'Monitoruj stron\u0119' : 'Monitor this page';
 }
 
 async function updateContextMenu() {
@@ -52,7 +54,7 @@ async function updateContextMenu() {
           id: CONTEXT_MENU_MONITOR_ID,
           title: contextMenuTitle(lang),
           contexts: ['page'],
-          // Ukrywa pozycję na stronach chrome://, plikach lokalnych itp.
+          // Ukrywa pozycj\u0119 na stronach chrome://, plikach lokalnych itp.
           documentUrlPatterns: ['http://*/*', 'https://*/*']
         },
         () => {
@@ -69,7 +71,7 @@ async function updateContextMenu() {
 chrome.contextMenus.onClicked.addListener(async (info) => {
   if (info.menuItemId !== CONTEXT_MENU_MONITOR_ID || !info.pageUrl) return;
 
-  // Zapisujemy tylko URL (z timestampem do wygaszenia po czasie) — nazwę
+  // Zapisujemy tylko URL (z timestampem do wygaszenia po czasie) \u2014 nazw\u0119
   // strony popup zaproponuje sam na podstawie hosta.
   await chrome.storage.local.set({ pendingAdd: { url: info.pageUrl, ts: Date.now() } });
 
@@ -91,7 +93,7 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
       iconUrl: 'icon48.png',
       title: lang === 'pl' ? 'Gotowe do dodania' : 'Ready to add',
       message: lang === 'pl'
-        ? 'Kliknij ikonę rozszerzenia, aby dokończyć dodawanie strony.'
+        ? 'Kliknij ikon\u0119 rozszerzenia, aby doko\u0144czy\u0107 dodawanie strony.'
         : 'Click the extension icon to finish adding this page.'
     });
   }
@@ -110,9 +112,9 @@ const HANDLERS = {
     if (msg.siteId) await refreshSiteSilently(String(msg.siteId));
     return { status: 'ok' };
   },
-  // Pojedynczy check: aktualizujemy badge od razu, bo użytkownik patrzy
+  // Pojedynczy check: aktualizujemy badge od razu, bo u\u017cytkownik patrzy
   // na wynik tej konkretnej strony. W batchu badge liczony jest raz na
-  // końcu — patrz runBatch().
+  // ko\u0144cu \u2014 patrz runBatch().
   checkNow: async (msg) => {
     if (!msg.siteId) return { status: 'skipped' };
     const result = await checkSite(String(msg.siteId));
@@ -123,6 +125,7 @@ const HANDLERS = {
   saveSite: (msg) => handleSaveSite(msg),
   toggleSite: (msg) => handleToggleSite(msg),
   deleteSite: (msg) => handleDeleteSite(msg),
+  undoDelete: (msg) => handleUndoDelete(msg),
   reorderSites: (msg) => handleReorderSites(msg),
   checkAll: () => checkAllSites(),
   importSites: (msg) => handleImportSites(msg)
@@ -198,9 +201,9 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   const site = (data.sites || []).find((s) => s.id === siteId);
   if (!site) return;
 
-  // Jeśli zmiana jest nieodczytana — otwieramy podgląd diffa zamiast samej
-  // strony; po zamknięciu diffa / przy odczycie otwieramy "otwieraną stronę"
-  // (site.openUrl), nie surowy URL monitorowany (może być endpointem JSON).
+  // Je\u015bli zmiana jest nieodczytana \u2014 otwieramy podgl\u0105d diffa zamiast samej
+  // strony; po zamkni\u0119ciu diffa / przy odczycie otwieramy "otwieran\u0105 stron\u0119"
+  // (site.openUrl), nie surowy URL monitorowany (mo\u017ce by\u0107 endpointem JSON).
   const url = site.hasChanged
     ? chrome.runtime.getURL('diff.html') + '#' + site.id
     : (site.openUrl || site.url);
@@ -226,11 +229,11 @@ function cleanHtmlSimple(htmlText) {
   return cleaned.replace(/\s+/g, ' ').trim();
 }
 
-// Wersja do PODGLĄDU ZMIAN (U1): w przeciwieństwie do cleanHtmlSimple
-// zachowuje strukturę linii — tagi blokowe stają się separatorami \n.
-// Dzięki temu diff porównuje akapity/komórki jako linie, a nie jeden
-// zwinięty ciąg tekstu. Snapshot jest trzymany ODRĘBNIE od hasha
-// (lastHash liczony jest nadal z cleanHtmlSimple, więc baseline się
+// Wersja do PODGL\u0104DU ZMIAN (U1): w przeciwie\u0144stwie do cleanHtmlSimple
+// zachowuje struktur\u0119 linii \u2014 tagi blokowe staj\u0105 si\u0119 separatorami \n.
+// Dzi\u0119ki temu diff por\u00f3wnuje akapity/kom\u00f3rki jako linie, a nie jeden
+// zwini\u0119ty ci\u0105g tekstu. Snapshot jest trzymany ODR\u0118BNIE od hasha
+// (lastHash liczony jest nadal z cleanHtmlSimple, wi\u0119c baseline si\u0119
 // nie psuje przy aktualizacji rozszerzenia).
 const SNAPSHOT_BLOCK_TAGS = 'p|div|br|li|tr|td|th|section|article|header|footer|nav|aside|h[1-6]|blockquote|ul|ol|table|figure|figcaption|dt|dd|hr|form|main';
 
@@ -238,9 +241,9 @@ function cleanHtmlStructured(htmlText) {
   if (!htmlText) return '';
 
   // B1: odpowiedzi JSON (monitorowane endpointy XHR) to jedna minifikowana
-  // linia — diff z niej byłby „ścianą tekstu". Pretty-print rozbija każdy
-  // klucz i wartość na osobną linię, dzięki czemu LCS ma co porównywać.
-  // Niepoprawny JSON spada do ścieżki HTML poniżej.
+  // linia \u2014 diff z niej by\u0142by \u201e\u015bcian\u0105 tekstu". Pretty-print rozbija ka\u017cdy
+  // klucz i warto\u015b\u0107 na osobn\u0105 lini\u0119, dzi\u0119ki czemu LCS ma co por\u00f3wnywa\u0107.
+  // Niepoprawny JSON spada do \u015bcie\u017cki HTML poni\u017cej.
   const trimmed = htmlText.trim();
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
@@ -248,7 +251,7 @@ function cleanHtmlStructured(htmlText) {
         .slice(0, SNAPSHOT_MAX_CHARS)
         .trim();
     } catch (e) {
-      // niepoprawny JSON — traktuj jak HTML
+      // niepoprawny JSON \u2014 traktuj jak HTML
     }
   }
   let cleaned = htmlText.replace(/<!--[\s\S]*?-->/g, '');
@@ -332,7 +335,7 @@ async function sha256(text) {
 }
 
 function targetKey(site) {
-  return JSON.stringify([site.url, site.requireCookies !== false, site.ignoreDates !== false]);
+  return JSON.stringify([site.url, site.requireCookies !== false, site.ignoreDates !== false, site.renderMode === 'rendered']);
 }
 
 function patchSite(siteId, patch) {
@@ -354,8 +357,8 @@ async function fetchHtml(url, requireCookies, signal, conditional) {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
   };
 
-  // Warunkowe żądanie (ETag / Last-Modified): jeśli serwer to wspiera i
-  // potwierdzi brak zmian odpowiedzią 304, oszczędzamy transfer i czas.
+  // Warunkowe \u017c\u0105danie (ETag / Last-Modified): je\u015bli serwer to wspiera i
+  // potwierdzi brak zmian odpowiedzi\u0105 304, oszcz\u0119dzamy transfer i czas.
   if (conditional && conditional.etag) headers['If-None-Match'] = conditional.etag;
   if (conditional && conditional.lastModified) headers['If-Modified-Since'] = conditional.lastModified;
 
@@ -385,6 +388,57 @@ async function fetchHtml(url, requireCookies, signal, conditional) {
   return { notModified: false, text, etag, lastModified };
 }
 
+// --- Rendered-page mode (JS-rendered sites) ---
+// Opens the page in a hidden tab, lets its JavaScript run, then reads
+// document.body.innerText. This is the only reliable way to monitor
+// content that XHR draws client-side (e.g. tournamentsoftware draws).
+// One hidden tab at a time (rendererBusy) to cap memory/CPU usage.
+
+let rendererBusy = Promise.resolve();
+
+function fetchRendered(url, requireCookies) {
+  // Serialize: every rendered check waits for the previous one.
+  const run = rendererBusy.then(() => fetchRenderedInner(url, requireCookies));
+  // Keep the queue alive even if one check fails.
+  rendererBusy = run.then(() => undefined, () => undefined);
+  return run;
+}
+
+async function fetchRenderedInner(url, requireCookies) {
+  let tabId = null;
+  try {
+    tabId = (await chrome.tabs.create({ url, active: false })).id;
+
+    // Wait for full load, then a short grace period for XHR-driven content.
+    await new Promise((resolve) => {
+      const started = Date.now();
+      const listener = (tabId_, info) => {
+        if (tabId_ === tabId && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      // Safety: do not hang forever if 'complete' never fires.
+      setTimeout(resolve, RENDER_LOAD_TIMEOUT_MS - (Date.now() - started));
+    });
+    await new Promise((resolve) => setTimeout(resolve, RENDER_GRACE_MS));
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => (document.body ? document.body.innerText : ''),
+      world: 'MAIN'
+    });
+    const text = (results && results[0] && results[0].result) || '';
+    if (!text.trim()) throw new Error('Rendered page produced no text');
+    return { notModified: false, text, etag: null, lastModified: null };
+  } finally {
+    if (tabId !== null) {
+      try { await chrome.tabs.remove(tabId); } catch (e) { /* already gone */ }
+    }
+  }
+}
+
 function normalizeContent(htmlText, ignoreDates) {
   let content = cleanHtmlSimple(htmlText);
   if (ignoreDates !== false) {
@@ -396,7 +450,7 @@ function normalizeContent(htmlText, ignoreDates) {
 async function notifyChange(site, lang) {
   const notifTitle = lang === 'pl' ? 'Zmiana wykryta!' : 'Change detected!';
   const notifMsg = lang === 'pl'
-    ? `Strona "${site.name}" została zaktualizowana.`
+    ? `Strona "${site.name}" zosta\u0142a zaktualizowana.`
     : `Web page "${site.name}" has been updated.`;
 
   const uniqueNotifId = `${NOTIFICATION_PREFIX}${site.id}_${Date.now()}`;
@@ -425,8 +479,8 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
     }
 
     // U1: przy wykrytej zmianie przesuwamy dotychczasowy lastSnapshot do
-    // prevSnapshot — diff.html porówna te dwie wersje. Przy 'unchanged'
-    // po prostu odświeżamy bieżący snapshot.
+    // prevSnapshot \u2014 diff.html por\u00f3wna te dwie wersje. Przy 'unchanged'
+    // po prostu od\u015bwie\u017camy bie\u017c\u0105cy snapshot.
     const snapshotText = (fetchResult && fetchResult.snapshotText) || '';
     const changed = status === 'changed';
 
@@ -440,6 +494,7 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
       lastAttemptTime: Date.now(),
       lastError: null,
       hasChanged: cur.hasChanged || changed,
+      suggestRendered: Boolean(fetchResult && fetchResult.suggestRendered),
       prevSnapshot: changed ? (cur.lastSnapshot || cur.prevSnapshot || '') : (cur.prevSnapshot || ''),
       lastSnapshot: snapshotText,
       changedAt: changed ? Date.now() : (cur.changedAt || null)
@@ -449,9 +504,9 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
   });
 }
 
-// Serwer potwierdził odpowiedzią 304, że treść się nie zmieniła — nie było
-// więc czego haszować ani snapshotować. Odświeżamy tylko znaczniki czasu
-// i świeże wartości ETag/Last-Modified.
+// Serwer potwierdzi\u0142 odpowiedzi\u0105 304, \u017ce tre\u015b\u0107 si\u0119 nie zmieni\u0142a \u2014 nie by\u0142o
+// wi\u0119c czego haszowa\u0107 ani snapshotowa\u0107. Od\u015bwie\u017camy tylko znaczniki czasu
+// i \u015bwie\u017ce warto\u015bci ETag/Last-Modified.
 function commitNotModified(siteId, expected, fetchResult) {
   return withStorageLock(async () => {
     const data = await chrome.storage.local.get('sites');
@@ -501,19 +556,34 @@ async function runCheck(siteId) {
       ? { etag: site.etag || null, lastModified: site.lastModified || null }
       : null;
 
-    const fetchResult = await fetchHtml(site.url, site.requireCookies, controller.signal, conditional);
+    // Rendered mode: read the page as the user SEES it (hidden tab + JS).
+    // Fast mode (default): plain fetch of the server response.
+    const fetchResult = site.renderMode === 'rendered'
+      ? await fetchRendered(site.url, site.requireCookies)
+      : await fetchHtml(site.url, site.requireCookies, controller.signal, conditional);
 
-    // Snapshot do podglądu zmian (U1) — liczony tylko przy pełnym pobraniu;
-    // przy 304 treść jest z definicji niezmieniona, snapshot zostaje stary.
+    // Snapshot do podgl\u0105du zmian (U1) \u2014 liczony tylko przy pe\u0142nym pobraniu;
+    // przy 304 tre\u015b\u0107 jest z definicji niezmieniona, snapshot zostaje stary.
     if (!fetchResult.notModified) {
-      fetchResult.snapshotText = cleanHtmlStructured(fetchResult.text);
+      fetchResult.snapshotText = site.renderMode === 'rendered' ? fetchResult.text : cleanHtmlStructured(fetchResult.text);
     }
 
     let result;
+    // Heuristic: readable text is nearly empty (short nav is fine) while the
+    // raw HTML is not a stub. A JS-rendered page returns a shell whose cleaned
+    // text is a tiny fraction of the markup. Measured on a real SPA: 33 chars
+    // of text from >500 chars of raw HTML.
+    const rawLen = (fetchResult.text || '').length;
+    const textLen = (fetchResult.snapshotText || '').length;
+    fetchResult.suggestRendered =
+      fetchResult.notModified === false &&
+      site.renderMode !== 'rendered' &&
+      rawLen > 500 &&
+      textLen < 500;
     if (fetchResult.notModified) {
       result = await commitNotModified(siteId, site, fetchResult);
     } else {
-      const normalized = normalizeContent(fetchResult.text, site.ignoreDates);
+      const normalized = site.renderMode === 'rendered' ? (site.ignoreDates !== false ? filterOutDatesAndTimes(fetchResult.text) : fetchResult.text) : normalizeContent(fetchResult.text, site.ignoreDates);
       const hash = await sha256(normalized);
       result = await commitCheck(siteId, site, hash, fetchResult);
     }
@@ -528,9 +598,9 @@ async function runCheck(siteId) {
       }
     }
 
-    // Badge celowo NIE jest tu aktualizowany — robi to wywołujący
-    // (checkNow / alarm / runBatch), żeby batch nie robił 50 zbędnych
-    // odczytów storage.
+    // Badge celowo NIE jest tu aktualizowany \u2014 robi to wywo\u0142uj\u0105cy
+    // (checkNow / alarm / runBatch), \u017ceby batch nie robi\u0142 50 zb\u0119dnych
+    // odczyt\u00f3w storage.
     return { status: result.status };
   } catch (error) {
     const message = error && error.name === 'AbortError'
@@ -568,7 +638,7 @@ async function runBatch(ids) {
   };
   await Promise.all(Array.from({ length: Math.min(CHECK_ALL_CONCURRENCY, ids.length) }, worker));
 
-  // Badge raz na cały batch, a nie po każdym checku.
+  // Badge raz na ca\u0142y batch, a nie po ka\u017cdym checku.
   await updateBadge();
   return summary;
 }
@@ -664,17 +734,17 @@ function sanitizeSiteInput(raw) {
   if (!name || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) return null;
 
   const requireCookies = Boolean(s.requireCookies);
-  // Zabezpieczenie także po stronie tła: blokada http:// + ciasteczka
-  // egzekwowana też tutaj (import z backupu omija popup.js).
+  // Zabezpieczenie tak\u017ce po stronie t\u0142a: blokada http:// + ciasteczka
+  // egzekwowana te\u017c tutaj (import z backupu omija popup.js).
   if (parsed.protocol === 'http:' && requireCookies) return null;
 
   let freqIndex = parseInt(s.freqIndex, 10);
   if (!(freqIndex >= 0 && freqIndex < FREQ_MAP.length)) freqIndex = 2;
 
-  // "Otwierana strona": URL otwierany po kliknięciu karty/powiadomienia.
-  // Pozwala monitorować endpoint API (JSON/XHR), a otwierać czytelny
-  // widok dla człowieka. Puste lub nieprawidłowe -> fallback na URL
-  // monitorowany. Celowo NIE wchodzi do targetKey (nie wpływa na hasz).
+  // "Otwierana strona": URL otwierany po klikni\u0119ciu karty/powiadomienia.
+  // Pozwala monitorowa\u0107 endpoint API (JSON/XHR), a otwiera\u0107 czytelny
+  // widok dla cz\u0142owieka. Puste lub nieprawid\u0142owe -> fallback na URL
+  // monitorowany. Celowo NIE wchodzi do targetKey (nie wp\u0142ywa na hasz).
   let openUrl = String(s.openUrl || '').trim().slice(0, 2000);
   if (openUrl) {
     try {
@@ -692,6 +762,7 @@ function sanitizeSiteInput(raw) {
     ignoreDates: Boolean(s.ignoreDates),
     requireCookies,
     enableNotifications: Boolean(s.enableNotifications),
+    renderMode: s.renderMode === 'rendered' ? 'rendered' : 'fast',
     openUrl: openUrl || url
   };
 }
@@ -725,6 +796,7 @@ async function handleSaveSite(msg) {
       ignoreDates: input.ignoreDates,
       requireCookies: input.requireCookies,
       enableNotifications: input.enableNotifications,
+      renderMode: input.renderMode,
       openUrl: input.openUrl
     };
 
@@ -876,6 +948,46 @@ async function handleDeleteSite(msg) {
   return { ok: removedUrl !== null };
 }
 
+// I2: restores a site deleted moments ago (the popup keeps the full record
+// in RAM until the user lets the summary hide). Reinserts the original object
+// (with snapshots and change state) at the original list position.
+async function handleUndoDelete(msg) {
+  const site = msg && msg.site;
+  if (!site || typeof site !== 'object' || !site.id || !site.url) {
+    return { ok: false, error: 'invalid' };
+  }
+  const index = Number.isInteger(msg.index) ? msg.index : -1;
+
+  const outcome = await withStorageLock(async () => {
+    const data = await chrome.storage.local.get('sites');
+    const sites = data.sites || [];
+
+    // Undo is best-effort: if the record reappeared meanwhile, treat as done.
+    if (sites.some((s) => s.id === site.id)) return { ok: true, origins: [] };
+
+    if (sites.some((s) => siteIdentity(s.url) === siteIdentity(site.url))) {
+      return { ok: false, error: 'duplicate' };
+    }
+    if (sites.length >= MAX_SITES) return { ok: false, error: 'limit' };
+
+    // Basic sanitation of text fields; the record comes from this extension's
+    // own storage, so full sanitizeSiteInput (which would drop snapshots) is
+    // deliberately not applied here.
+    const copy = { ...site };
+    copy.name = String(copy.name || '').slice(0, 100);
+    copy.url = String(copy.url || '').slice(0, 2000);
+
+    const inserted = [...sites];
+    if (index >= 0 && index <= inserted.length) inserted.splice(index, 0, copy);
+    else inserted.push(copy);
+
+    await chrome.storage.local.set({ sites: inserted });
+    return { ok: true, origins: [originPattern(copy.url)].filter(Boolean) };
+  });
+
+  await setupAlarms();
+  return outcome;
+}
 async function handleReorderSites(msg) {
   const order = Array.isArray(msg && msg.order) ? msg.order.map(String) : [];
   await withStorageLock(async () => {
