@@ -126,6 +126,7 @@ const HANDLERS = {
   toggleSite: (msg) => handleToggleSite(msg),
   deleteSite: (msg) => handleDeleteSite(msg),
   undoDelete: (msg) => handleUndoDelete(msg),
+  markAllRead: async () => handleMarkAllRead(),
   reorderSites: (msg) => handleReorderSites(msg),
   checkAll: () => checkAllSites(),
   importSites: (msg) => handleImportSites(msg)
@@ -427,7 +428,7 @@ async function fetchRenderedInner(url, requireCookies) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => (document.body ? document.body.innerText : ''),
-      world: 'MAIN'
+      // Default ISOLATED world is enough to read innerText and safer than MAIN.
     });
     const text = (results && results[0] && results[0].result) || '';
     if (!text.trim()) throw new Error('Rendered page produced no text');
@@ -987,6 +988,23 @@ async function handleUndoDelete(msg) {
 
   await setupAlarms();
   return outcome;
+}
+// "Mark all as read": clears hasChanged on every site at once.
+async function handleMarkAllRead() {
+  await withStorageLock(async () => {
+    const data = await chrome.storage.local.get('sites');
+    const sites = data.sites || [];
+    let touched = false;
+    for (const s of sites) {
+      if (s.hasChanged) {
+        s.hasChanged = false;
+        touched = true;
+      }
+    }
+    if (touched) await chrome.storage.local.set({ sites });
+  });
+  await updateBadge();
+  return { ok: true };
 }
 async function handleReorderSites(msg) {
   const order = Array.isArray(msg && msg.order) ? msg.order.map(String) : [];
