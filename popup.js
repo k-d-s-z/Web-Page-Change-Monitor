@@ -46,10 +46,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderSites();
 
   await maybeOpenPendingAdd();
+  await maybeRestorePicker();
 
   document.getElementById('btn-add-view').addEventListener('click', () => showForm());
   document.getElementById('btn-cancel').addEventListener('click', () => showList());
   document.getElementById('btn-save').addEventListener('click', saveSite);
+  document.getElementById('btn-pick').addEventListener('click', startPicker);
   document.getElementById('btn-refresh-all').addEventListener('click', refreshAll);
   document.getElementById('btn-mark-read').addEventListener('click', markAllRead);
   document.getElementById('btn-settings').addEventListener('click', () => toggleSettingsPanel());
@@ -88,6 +90,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   initDragAndDrop(document.getElementById('sites-container'));
 });
+
+// Wrapper na chrome.runtime.sendMessage â nigdy nie rzuca; bÅÄd kanaÅu
+// zwracany jest jako { ok: false, error }, Å¼eby wywoÅujÄcy mÃ³gÅ go obsÅuÅ¼yÄ.
+async function callBackground(msg) {
+  try {
+    return await chrome.runtime.sendMessage(msg);
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
 
 function flashFromResult(result) {
   const t = TRANSLATIONS[currentLang];
@@ -437,19 +449,103 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-rendered').checked = false;
   }
 
-  // RozwiÅ âOpcje zaawansowaneâ, gdy edytowana strona odbiega od domyÅlnych
-  // ustawieÅ (ma selektor, wymaga ciasteczek albo nie pomija dat) â
-  // w przeciwnym razie formularz startuje zwiniÄty (mniej tekstu).
-  setAdvanced(
-    !!document.getElementById('site-selector').value ||
-    document.getElementById('site-cookies').checked ||
-    !document.getElementById('site-ignore-dates').checked
-  );
-
   if (prefill) {
     const nameField = document.getElementById('site-name');
     nameField.focus();
     nameField.select();
+  }
+}
+
+// --- âWybierz element na stronieâ¦â (element picker) ----------------------
+// Otwiera monitorowany URL w nowej karcie z wstrzykniÄtym pickerem
+// (patrz picker.js): najechanie podÅwietla fragment, klik wybiera element
+// i generuje selektor. Popup w tym czasie siÄ zamknie (karta przejmuje
+// focus), wiÄc wynik wraca przez storage (pendingPicker), a przy
+// kolejnym otwarciu popupu przywracamy formularz z uzupeÅnionym polem.
+async function startPicker() {
+  const t = TRANSLATIONS[currentLang];
+  clearFormMessage();
+
+  let url = document.getElementById('site-url').value.trim();
+  if (!url) {
+    showFormMessage(t.alertFillFields);
+    return;
+  }
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try { new URL(url); } catch (err) {
+    showFormMessage(t.alertInvalidUrl);
+    return;
+  }
+
+  // chrome.scripting w karcie wymaga uprawnienia hosta â tego samego,
+  // ktÃ³re i tak wymaga samo monitorowanie. ProÅba musi nastÄpiÄ w geÅcie
+  // uÅ¼ytkownika (klik), dlatego jest tutaj, a nie w tle.
+  const pattern = `${new URL(url).origin}/*`;
+  const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
+  if (!hasPermission) {
+    let granted = false;
+    try { granted = await chrome.permissions.request({ origins: [pattern] }); }
+    catch (err) { granted = false; }
+    if (!granted) {
+      showFormMessage(t.pickerPermission);
+      return;
+    }
+  }
+
+  const siteId = document.getElementById('site-id').value || null;
+  // Form draft is kept under a separate key: picker.js overwrites pendingPicker
+  // when the user picks, so the other fields would be lost there.
+  const draft = {
+    name: document.getElementById('site-name').value,
+    freqIndex: document.getElementById('site-freq').value,
+    ignoreDates: document.getElementById('site-ignore-dates').checked,
+    requireCookies: document.getElementById('site-cookies').checked,
+    enableNotifications: document.getElementById('site-notifications').checked,
+    renderMode: document.getElementById('site-rendered').checked
+  };
+  await chrome.storage.local.set({ pendingPicker: { url, siteId }, pickerDraft: draft });
+  const res = await callBackground({ action: 'startPicker', url, siteId });
+  if (!res || !res.ok) {
+    await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
+    showFormMessage(res && res.error === 'permission' ? t.pickerPermission : t.errSave);
+    return;
+  }
+  // StÄd popup zamknie siÄ sam, gdy karta przejmie focus; wynik odbierze
+  // maybeRestorePicker() przy kolejnym otwarciu.
+}
+
+function applyPickerDraft(draft) {
+  if (!draft) return;
+  document.getElementById('site-name').value = draft.name || '';
+  document.getElementById('site-freq').value = draft.freqIndex;
+  document.getElementById('site-ignore-dates').checked = draft.ignoreDates !== false;
+  document.getElementById('site-cookies').checked = Boolean(draft.requireCookies);
+  document.getElementById('site-notifications').checked = draft.enableNotifications !== false;
+  document.getElementById('site-rendered').checked = Boolean(draft.renderMode);
+}
+
+async function maybeRestorePicker() {
+  const data = await chrome.storage.local.get(['pendingPicker', 'pickerDraft']);
+  const picked = data.pendingPicker;
+  if (!picked || !picked.selector) return;
+
+  await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
+  const t = TRANSLATIONS[currentLang];
+
+  if (picked.siteId) {
+    const all = await chrome.storage.local.get('sites');
+    const site = (all.sites || []).find((s) => s.id === picked.siteId);
+    if (site) {
+      showForm(site);
+      applyPickerDraft(data.pickerDraft);
+      document.getElementById('site-selector').value = picked.selector;
+      showFormMessage(t.pickerDone);
+    }
+  } else {
+    showForm(null, { url: picked.url });
+    applyPickerDraft(data.pickerDraft);
+    document.getElementById('site-selector').value = picked.selector;
+    showFormMessage(t.pickerDone);
   }
 }
 
@@ -522,19 +618,6 @@ document.addEventListener('keydown', (e) => {
     e.stopPropagation();
     hidePopover();
   }
-});
-
-// --- âOpcje zaawansowaneâ (selektor CSS, daty, ciasteczka) ---------------
-const btnAdvanced = document.getElementById('btn-advanced');
-const advSection = document.getElementById('advanced-section');
-
-function setAdvanced(open) {
-  advSection.classList.toggle('open', open);
-  btnAdvanced.setAttribute('aria-expanded', String(open));
-}
-
-btnAdvanced.addEventListener('click', () => {
-  setAdvanced(!advSection.classList.contains('open'));
 });
 
 async function showList() {

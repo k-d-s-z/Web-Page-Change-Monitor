@@ -129,7 +129,10 @@ const HANDLERS = {
   markAllRead: async () => handleMarkAllRead(),
   reorderSites: (msg) => handleReorderSites(msg),
   checkAll: () => checkAllSites(),
-  importSites: (msg) => handleImportSites(msg)
+  importSites: (msg) => handleImportSites(msg),
+  startPicker: (msg) => handleStartPicker(msg),
+  pickerPicked: (msg, sender) => handlePickerPicked(msg, sender),
+  pickerCancelled: (msg, sender) => handlePickerCancelled(msg, sender)
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -138,7 +141,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const handler = msg && Object.hasOwn(HANDLERS, msg.action) ? HANDLERS[msg.action] : null;
   if (!handler) return;
 
-  handler(msg)
+  handler(msg, sender)
     .then(sendResponse)
     .catch((err) => {
       console.error('[Monitor] Handler error:', err);
@@ -1058,5 +1061,121 @@ async function handleReorderSites(msg) {
 
     await chrome.storage.local.set({ sites: reordered });
   });
+  return { ok: true };
+}
+
+// --- Element picker ("Pick element on the page...") ---
+// The popup saves a pendingPicker record (url + siteId) and asks the
+// background to open the page with the picker injected (the popup already
+// requested the host permission - chrome.scripting needs it too). When the
+// user clicks a fragment, the content script sends back the generated CSS
+// selector; the background stores it in pendingPicker and closes the tab.
+// The popup is closed at that point (the tab took focus), so on the next
+// open it reads pendingPicker and re-opens the form with the selector filled.
+
+function pickerHintText(lang) {
+  return lang === 'pl'
+    ? 'Kliknij fragment strony, kt\u00f3ry chcesz monitorowa\u0107. Esc anuluje.'
+    : 'Click the part of the page you want to watch. Esc cancels.';
+}
+
+async function handleStartPicker(msg) {
+  const url = String((msg && msg.url) || '');
+  const siteId = msg && msg.siteId ? String(msg.siteId) : null;
+
+  let parsed;
+  try { parsed = new URL(url); } catch (e) { return { ok: false, error: 'invalid' }; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { ok: false, error: 'invalid' };
+
+  const pattern = originPattern(url);
+  const granted = Boolean(pattern) && await chrome.permissions.contains({ origins: [pattern] });
+  if (!granted) return { ok: false, error: 'permission' };
+
+  const tab = await chrome.tabs.create({ url, active: true });
+  const tabId = tab.id;
+
+  // Wait for a full load (same pattern as the rendered mode), with a timeout
+  // fallback so a hung page still gets the picker.
+  await new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    const listener = (tabId_, info) => {
+      if (tabId_ === tabId && info.status === 'complete') finish();
+    };
+    const timer = setTimeout(finish, RENDER_LOAD_TIMEOUT_MS);
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+  await new Promise((resolve) => setTimeout(resolve, RENDER_GRACE_MS));
+
+  // The user may have closed the tab meanwhile - do not inject into a ghost.
+  try { await chrome.tabs.get(tabId); }
+  catch (e) { return { ok: false, error: 'tabClosed' }; }
+
+  await chrome.scripting.insertCSS({ target: { tabId }, files: ['picker.css'] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['picker.js'] });
+
+  const data = await chrome.storage.local.get('language');
+  const lang = data.language || detectLanguage();
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'pickerStart',
+      hint: pickerHintText(lang),
+      url,
+      siteId
+    });
+  } catch (e) {
+    return { ok: false, error: 'injectFailed' };
+  }
+  return { ok: true };
+}
+
+async function handlePickerPicked(msg, sender) {
+  const selector = String((msg && msg.selector) || '').slice(0, 200);
+  const data = await chrome.storage.local.get('pendingPicker');
+  const info = data.pendingPicker || {};
+  info.selector = selector;
+  await chrome.storage.local.set({ pendingPicker: info });
+
+  if (sender && sender.tab && sender.tab.id != null) {
+    try { await chrome.tabs.remove(sender.tab.id); } catch (e) { /* already gone */ }
+  }
+
+  // Bring the form back: reopen the popup (it restores the form from
+  // pendingPicker). openPopup needs a focused browser window, so wait briefly
+  // after the picker tab closes. Fallback: a notification asking to click the icon.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  let opened = false;
+  try {
+    if (chrome.action && typeof chrome.action.openPopup === 'function') {
+      await chrome.action.openPopup();
+      opened = true;
+    }
+  } catch (e) {
+    opened = false;
+  }
+  if (!opened) {
+    const lang = (await chrome.storage.local.get('language')).language || detectLanguage();
+    chrome.notifications.create(`pendingadd_${Date.now()}`, {
+      type: 'basic',
+      iconUrl: 'icon48.png',
+      title: lang === 'pl' ? 'Fragment wybrany' : 'Fragment selected',
+      message: lang === 'pl'
+        ? 'Kliknij ikon\u0119 rozszerzenia, aby doko\u0144czy\u0107 dodawanie strony.'
+        : 'Click the extension icon to finish adding this page.'
+    });
+  }
+  return { ok: true };
+}
+
+async function handlePickerCancelled() {
+  // Esc: drop only the hanging pendingPicker record. The tab stays open (the
+  // user may want to browse it); the picker UI removes itself.
+  await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
   return { ok: true };
 }

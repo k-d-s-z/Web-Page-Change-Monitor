@@ -170,8 +170,8 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    /* Panel ustawieÅ: wysuwanie przez grid-rows 0fr -> 1fr (pÅynne,
-       bez znanej puÅapki animowania max-height). */
+    /* Panel ustawieÃÂ: wysuwanie przez grid-rows 0fr -> 1fr (pÃÂynne,
+       bez znanej puÃÂapki animowania max-height). */
     .settings-panel {
       display: grid;
       grid-template-rows: 0fr;
@@ -209,8 +209,8 @@
       height: 26px;
       border-radius: 8px;
     }
-    /* UkÅad 2Ã2: kolumna âKopia ustawieÅ" (UtwÃ³rz/PrzywrÃ³Ä) i kolumna
-       âJÄzyk" (EN/PL) â rÃ³wne kolumny z krÃ³tkimi nagÅÃ³wkami. */
+    /* UkÃÂad 2ÃÂ2: kolumna Ã¢ÂÂKopia ustawieÃÂ" (UtwÃÂ³rz/PrzywrÃÂ³ÃÂ) i kolumna
+       Ã¢ÂÂJÃÂzyk" (EN/PL) Ã¢ÂÂ rÃÂ³wne kolumny z krÃÂ³tkimi nagÃÂÃÂ³wkami. */
     .settings-grid {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -291,6 +291,13 @@
     .btn-secondary:focus-visible {
       outline: 2px solid var(--brand);
       outline-offset: 1px;
+    }
+    /* "Pick element on the page..." - full-width secondary button under the
+       selector input. */
+    .btn-pick {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
     }
     .btn-main {
       width: 100%;
@@ -375,8 +382,8 @@
       outline: 2px solid var(--brand);
       outline-offset: 1px;
     }
-    /* A2: pauza â karta w peÅni czytelna (bez opacity na caÅoÅci);
-       wyciszamy tylko nazwÄ i metadane oraz ramkÄ. DziaÅa teÅ¼ z hover. */
+    /* A2: pauza Ã¢ÂÂ karta w peÃÂni czytelna (bez opacity na caÃÂoÃÂci);
+       wyciszamy tylko nazwÃÂ i metadane oraz ramkÃÂ. DziaÃÂa teÃÂ¼ z hover. */
     .site-card.paused {
       border-style: dashed;
       border-color: var(--bg-soft);
@@ -996,12 +1003,7 @@
       </button>
     </div>
 
-    <button type="button" id="btn-advanced" class="adv-toggle" aria-expanded="false" aria-controls="advanced-section">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-      <span data-i18n="lblAdvanced">Advanced options</span>
-    </button>
-
-    <div id="advanced-section" class="adv-section">
+    <div id="advanced-section" class="adv-section open">
       <div class="adv-section-inner">
         <div class="form-group">
           <div class="label-row">
@@ -1011,6 +1013,7 @@
             </button>
           </div>
           <input type="text" id="site-selector" placeholder="#content, .results, main">
+          <button type="button" id="btn-pick" class="btn-secondary btn-pick" data-i18n="btnPick">Pick element on the page...</button>
         </div>
 
         <div class="checkbox-row">
