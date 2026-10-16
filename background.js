@@ -339,7 +339,9 @@ async function sha256(text) {
 }
 
 function targetKey(site) {
-  return JSON.stringify([site.url, site.requireCookies !== false, site.ignoreDates !== false, site.renderMode === 'rendered']);
+  // selector is part of the key: changing it changes what is hashed, so the
+  // baseline must be reset (otherwise the first check reports a false change).
+  return JSON.stringify([site.url, site.requireCookies !== false, site.ignoreDates !== false, site.renderMode === 'rendered', site.selector || '']);
 }
 
 function patchSite(siteId, patch) {
@@ -352,6 +354,32 @@ function patchSite(siteId, patch) {
     await chrome.storage.local.set({ sites });
     return true;
   });
+}
+
+// --- Fast mode + CSS selector ---
+// The service worker has no DOMParser, so the fetched HTML is parsed in an
+// offscreen document (offscreen.js), which returns only the matched fragment.
+let offscreenCreating = null;
+
+async function ensureOffscreen() {
+  const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+  if (contexts.length > 0) return;
+  if (!offscreenCreating) {
+    offscreenCreating = chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['DOM_PARSER'],
+      justification: 'Extract the monitored fragment (CSS selector) from fetched HTML'
+    }).finally(() => { offscreenCreating = null; });
+  }
+  await offscreenCreating;
+}
+
+async function extractFragment(html, selector) {
+  await ensureOffscreen();
+  const res = await chrome.runtime.sendMessage({ target: 'offscreen', action: 'extractFragment', html, selector });
+  if (!res || !res.ok) throw new Error('Invalid selector');
+  if (!res.found) throw new Error('Selector not found in page source (JS-drawn content? enable rendered mode)');
+  return res.html;
 }
 
 async function fetchHtml(url, requireCookies, signal, conditional) {
@@ -588,6 +616,11 @@ async function runCheck(siteId) {
       ? await fetchRendered(site.url, site.requireCookies, site.selector)
       : await fetchHtml(site.url, site.requireCookies, controller.signal, conditional);
 
+    // Fast mode + selector: keep only the matched fragment of the fetched HTML.
+    if (site.renderMode !== 'rendered' && site.selector && !fetchResult.notModified) {
+      fetchResult.text = await extractFragment(fetchResult.text, site.selector);
+    }
+
     // Snapshot do podgl\u0105du zmian (U1) \u2014 liczony tylko przy pe\u0142nym pobraniu;
     // przy 304 tre\u015b\u0107 jest z definicji niezmieniona, snapshot zostaje stary.
     if (!fetchResult.notModified) {
@@ -604,6 +637,7 @@ async function runCheck(siteId) {
     fetchResult.suggestRendered =
       fetchResult.notModified === false &&
       site.renderMode !== 'rendered' &&
+      !site.selector &&
       rawLen > 500 &&
       textLen < 500;
     if (fetchResult.notModified) {
@@ -782,8 +816,8 @@ function sanitizeSiteInput(raw) {
   }
 
   // Optional CSS selector: monitor only a fragment of the page (e.g. the
-  // results table), not the whole body incl. navigation. Applies to the
-  // rendered mode; the fast mode ignores it.
+  // results table), not the whole body incl. navigation. Works in both
+  // modes (fast mode parses the fetched HTML in an offscreen document).
   let selector = String(s.selector || '').trim().slice(0, 200);
   if (selector && !/^[a-zA-Z0-9 #.\[\]:\-_>"'=()~*,+|^$\\\/]+$/.test(selector)) {
     selector = '';
@@ -1127,7 +1161,9 @@ async function handleStartPicker(msg) {
       action: 'pickerStart',
       hint: pickerHintText(lang),
       url,
-      siteId
+      siteId,
+      requireCookies: Boolean(msg && msg.requireCookies),
+      rendered: Boolean(msg && msg.rendered)
     });
   } catch (e) {
     return { ok: false, error: 'injectFailed' };

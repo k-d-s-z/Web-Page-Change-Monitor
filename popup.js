@@ -292,7 +292,9 @@ async function createBackup() {
       freqIndex: s.freqIndex,
       ignoreDates: Boolean(s.ignoreDates),
       requireCookies: Boolean(s.requireCookies),
-      enableNotifications: Boolean(s.enableNotifications)
+      enableNotifications: Boolean(s.enableNotifications),
+      renderMode: s.renderMode === 'rendered' ? 'rendered' : 'fast',
+      selector: s.selector || ''
     }))
   };
 
@@ -504,7 +506,13 @@ async function startPicker() {
     renderMode: document.getElementById('site-rendered').checked
   };
   await chrome.storage.local.set({ pendingPicker: { url, siteId }, pickerDraft: draft });
-  const res = await callBackground({ action: 'startPicker', url, siteId });
+  const res = await callBackground({
+    action: 'startPicker',
+    url,
+    siteId,
+    requireCookies: document.getElementById('site-cookies').checked,
+    rendered: document.getElementById('site-rendered').checked
+  });
   if (!res || !res.ok) {
     await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
     showFormMessage(res && res.error === 'permission' ? t.pickerPermission : t.errSave);
@@ -524,6 +532,15 @@ function applyPickerDraft(draft) {
   document.getElementById('site-rendered').checked = Boolean(draft.renderMode);
 }
 
+// The picked element is drawn by scripts (absent from the server HTML): the
+// fast mode could never find it, so switch the form to the rendered mode.
+function applyNeedsRendered(picked) {
+  if (!picked.needsRendered) return false;
+  document.getElementById('site-rendered').checked = true;
+  document.getElementById('site-cookies').checked = true; // rendered mode always uses the session
+  return true;
+}
+
 async function maybeRestorePicker() {
   const data = await chrome.storage.local.get(['pendingPicker', 'pickerDraft']);
   const picked = data.pendingPicker;
@@ -539,13 +556,13 @@ async function maybeRestorePicker() {
       showForm(site);
       applyPickerDraft(data.pickerDraft);
       document.getElementById('site-selector').value = picked.selector;
-      showFormMessage(t.pickerDone);
+      showFormMessage(applyNeedsRendered(picked) ? t.pickerDoneRendered : t.pickerDone);
     }
   } else {
     showForm(null, { url: picked.url });
     applyPickerDraft(data.pickerDraft);
     document.getElementById('site-selector').value = picked.selector;
-    showFormMessage(t.pickerDone);
+    showFormMessage(applyNeedsRendered(picked) ? t.pickerDoneRendered : t.pickerDone);
   }
 }
 

@@ -18,7 +18,7 @@
   let target = null;
   let downTarget = null;
   let picked = false;
-  let ctx = { url: null, siteId: null };
+  let ctx = { url: null, siteId: null, requireCookies: false, rendered: false };
 
   const overlay = document.createElement('div');
   overlay.className = 'wpcm-picker-overlay';
@@ -128,24 +128,53 @@
     }
   }
 
+  // Fast mode reads the server HTML (no JavaScript), while the picker sees the
+  // rendered page. Re-fetch the source the same way the monitor does (same
+  // cookie policy) and check whether the selector exists there.
+  // Returns true / false, or null when it cannot be determined.
+  async function existsInSource(selector) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(ctx.url || location.href, {
+        credentials: ctx.requireCookies ? 'include' : 'omit',
+        cache: 'no-store',
+        signal: ctrl.signal
+      });
+      if (!res.ok) return null;
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      return Boolean(doc.querySelector(selector));
+    } catch (err) {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // The pick itself: save the selector DIRECTLY to storage (the record was
   // seeded by the popup with url/siteId; the pickerStart message carried
   // them here so this content script can write a complete record even if
   // the runtime message below never reaches the background). The
   // pickerPicked message only asks the background to close the tab.
-  function pick(el) {
+  async function pick(el) {
     if (picked) return;
     picked = true;
     const selector = selectorFor(el || target || downTarget);
-    const record = { url: ctx.url, siteId: ctx.siteId, selector };
+    cleanup();
+
+    // needsRendered: the element is NOT in the server HTML, so the fast mode
+    // would never find it - the popup then turns the rendered mode on.
+    let needsRendered = false;
+    if (!ctx.rendered) needsRendered = (await existsInSource(selector)) === false;
+
+    const record = { url: ctx.url, siteId: ctx.siteId, selector, needsRendered };
 
     try {
       // Direct, channel-independent persistence - this is what the popup
       // reads on its next open (maybeRestorePicker()).
-      chrome.storage.local.set({ pendingPicker: record });
+      await chrome.storage.local.set({ pendingPicker: record });
     } catch (err) { /* noop */ }
 
-    cleanup();
     try { chrome.runtime.sendMessage({ action: 'pickerPicked', selector }); } catch (err) { /* noop */ }
   }
 
@@ -202,6 +231,8 @@
     hintBar.textContent = msg.hint || '';
     ctx.url = msg.url || null;
     ctx.siteId = msg.siteId || null;
+    ctx.requireCookies = Boolean(msg.requireCookies);
+    ctx.rendered = Boolean(msg.rendered);
     document.documentElement.appendChild(hintBar);
     document.documentElement.appendChild(overlay);
     document.documentElement.appendChild(label);

@@ -12,7 +12,8 @@
     "contextMenus",
     "scripting",
     "tabs",
-    "favicon"
+    "favicon",
+    "offscreen"
   ],
   "optional_host_permissions": [
     "<all_urls>"
