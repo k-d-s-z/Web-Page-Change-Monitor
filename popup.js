@@ -418,10 +418,6 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-id').value = site.id;
     document.getElementById('site-name').value = site.name;
     document.getElementById('site-url').value = site.url;
-    // "Opened page": show only when it differs from the monitored URL
-    // (no need to clutter the field with a URL copy during plain edits).
-    document.getElementById('site-openurl').value =
-      (site.openUrl && site.openUrl !== site.url) ? site.openUrl : '';
     document.getElementById('site-selector').value = site.selector || '';
     document.getElementById('site-freq').value = site.freqIndex;
     document.getElementById('site-ignore-dates').checked = site.ignoreDates !== false;
@@ -433,7 +429,6 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-id').value = '';
     document.getElementById('site-name').value = prefill ? prefill.name || '' : '';
     document.getElementById('site-url').value = prefill ? prefill.url || '' : '';
-    document.getElementById('site-openurl').value = '';
     document.getElementById('site-selector').value = '';
     document.getElementById('site-freq').value = DEFAULT_FREQ_INDEX;
     document.getElementById('site-ignore-dates').checked = true;
@@ -442,12 +437,105 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-rendered').checked = false;
   }
 
+  // RozwiÅ âOpcje zaawansowaneâ, gdy edytowana strona odbiega od domyÅlnych
+  // ustawieÅ (ma selektor, wymaga ciasteczek albo nie pomija dat) â
+  // w przeciwnym razie formularz startuje zwiniÄty (mniej tekstu).
+  setAdvanced(
+    !!document.getElementById('site-selector').value ||
+    document.getElementById('site-cookies').checked ||
+    !document.getElementById('site-ignore-dates').checked
+  );
+
   if (prefill) {
     const nameField = document.getElementById('site-name');
     nameField.focus();
     nameField.select();
   }
 }
+
+// --- SpÃ³jny system popoverÃ³w âiâ (dodatkowe wyjaÅnienia opcji) -----------
+// Jeden wspÃ³Ådzielony element #popover; treÅÄ brana w chwili otwarcia z
+// TRANSLATIONS[data-popover], wiÄc zmiana jÄzyka nie wymaga odÅwieÅ¼ania.
+const POPOVER_EL = document.getElementById('popover');
+let popoverOwner = null;
+
+function positionPopover(btn) {
+  POPOVER_EL.style.left = '0px';
+  POPOVER_EL.style.top = '0px';
+  POPOVER_EL.classList.add('show');
+  const btnRect = btn.getBoundingClientRect();
+  const popRect = POPOVER_EL.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let left = btnRect.right + 8;
+  if (left + popRect.width > vw - 8) {
+    left = Math.max(8, btnRect.left - popRect.width - 8);
+  }
+  let top = btnRect.top - 4;
+  if (top + popRect.height > vh - 8) {
+    top = Math.max(8, vh - popRect.height - 8);
+  }
+  POPOVER_EL.style.left = `${Math.round(left)}px`;
+  POPOVER_EL.style.top = `${Math.round(top)}px`;
+}
+
+function hidePopover() {
+  if (!popoverOwner) return;
+  popoverOwner.setAttribute('aria-expanded', 'false');
+  popoverOwner = null;
+  POPOVER_EL.classList.remove('show');
+  POPOVER_EL.setAttribute('aria-hidden', 'true');
+  POPOVER_EL.textContent = '';
+}
+
+function togglePopover(btn) {
+  if (popoverOwner === btn) {
+    hidePopover();
+    return;
+  }
+  hidePopover();
+  const key = btn.getAttribute('data-popover');
+  const text = TRANSLATIONS[currentLang][key];
+  if (!text) return;
+  popoverOwner = btn;
+  POPOVER_EL.textContent = text;
+  POPOVER_EL.setAttribute('aria-hidden', 'false');
+  btn.setAttribute('aria-expanded', 'true');
+  positionPopover(btn);
+}
+
+document.querySelectorAll('.info-btn').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePopover(btn);
+  });
+});
+
+// Klik poza popoverem i Escape go zamykajÄ (jak panel ustawieÅ).
+document.addEventListener('click', (e) => {
+  if (!popoverOwner) return;
+  if (popoverOwner.contains(e.target) || POPOVER_EL.contains(e.target)) return;
+  hidePopover();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && popoverOwner) {
+    e.stopPropagation();
+    hidePopover();
+  }
+});
+
+// --- âOpcje zaawansowaneâ (selektor CSS, daty, ciasteczka) ---------------
+const btnAdvanced = document.getElementById('btn-advanced');
+const advSection = document.getElementById('advanced-section');
+
+function setAdvanced(open) {
+  advSection.classList.toggle('open', open);
+  btnAdvanced.setAttribute('aria-expanded', String(open));
+}
+
+btnAdvanced.addEventListener('click', () => {
+  setAdvanced(!advSection.classList.contains('open'));
+});
 
 async function showList() {
   document.getElementById('view-form').style.display = 'none';
@@ -472,7 +560,6 @@ async function saveSite() {
   const id = document.getElementById('site-id').value;
   const name = document.getElementById('site-name').value.trim();
   let url = document.getElementById('site-url').value.trim();
-  const openUrl = document.getElementById('site-openurl').value.trim();
   const selector = document.getElementById('site-selector').value.trim();
   const freqIndex = parseInt(document.getElementById('site-freq').value, 10);
   const ignoreDates = document.getElementById('site-ignore-dates').checked;
@@ -510,7 +597,7 @@ async function saveSite() {
 
   const res = await callBackground({
     action: 'saveSite',
-    site: { id, name, url, openUrl, freqIndex, ignoreDates, requireCookies, enableNotifications, renderMode, selector }
+    site: { id, name, url, freqIndex, ignoreDates, requireCookies, enableNotifications, renderMode, selector }
   });
 
   if (!res.ok) {

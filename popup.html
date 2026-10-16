@@ -170,8 +170,8 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    /* Panel ustawie&#x144;: wysuwanie przez grid-rows 0fr -> 1fr (p&#x142;ynne,
-       bez znanej pulapki animowania max-height). */
+    /* Panel ustawieÅ: wysuwanie przez grid-rows 0fr -> 1fr (pÅynne,
+       bez znanej puÅapki animowania max-height). */
     .settings-panel {
       display: grid;
       grid-template-rows: 0fr;
@@ -209,8 +209,8 @@
       height: 26px;
       border-radius: 8px;
     }
-    /* Uk&#x142;ad 2&#xd7;2: kolumna &#x201e;Kopia ustawie&#x144;" (Utw&#xf3;rz/Przywr&#xf3;&#x107;) i kolumna
-       &#x201e;J&#x119;zyk" (EN/PL) &#x2014; r&#xf3;wne kolumny z kr&#xf3;tkimi nag&#x142;&#xf3;wkami. */
+    /* UkÅad 2Ã2: kolumna âKopia ustawieÅ" (UtwÃ³rz/PrzywrÃ³Ä) i kolumna
+       âJÄzyk" (EN/PL) â rÃ³wne kolumny z krÃ³tkimi nagÅÃ³wkami. */
     .settings-grid {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -337,10 +337,10 @@
       border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
     .refresh-summary {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-2);
       margin-bottom: 6px;
-      min-height: 15px;
+      min-height: 16px;
     }
     .refresh-summary:empty {
       display: none;
@@ -375,8 +375,8 @@
       outline: 2px solid var(--brand);
       outline-offset: 1px;
     }
-    /* A2: pauza &#x2014; karta w pe&#x142;ni czytelna (bez opacity na ca&#x142;o&#x15b;ci);
-       wyciszamy tylko nazw&#x119; i metadane oraz ramk&#x119;. Dzia&#x142;a te&#x17c; z hover. */
+    /* A2: pauza â karta w peÅni czytelna (bez opacity na caÅoÅci);
+       wyciszamy tylko nazwÄ i metadane oraz ramkÄ. DziaÅa teÅ¼ z hover. */
     .site-card.paused {
       border-style: dashed;
       border-color: var(--bg-soft);
@@ -553,6 +553,8 @@
       .icon-btn.busy svg { animation-duration: 3s; }
       .settings-panel { transition: none; }
       .settings-panel:not(.open) { display: none; }
+      .adv-section { transition: none; }
+      .adv-section:not(.open) { display: none; }
     }
     .btn-toggle {
       color: var(--text-2);
@@ -565,12 +567,12 @@
     .confirm-text {
       flex: 1;
       min-width: 0;
-      font-size: 12px;
-      font-weight: 500;
+      font-size: 13px;
+      font-weight: 600;
       color: var(--text);
     }
     .confirm-name {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: normal;
       color: var(--text-2);
       white-space: nowrap;
@@ -580,7 +582,7 @@
     .btn-confirm-yes, .btn-confirm-no {
       padding: 0 14px;
       font-weight: 700;
-      font-size: 12px;
+      font-size: 13px;
       border-radius: 6px;
     }
     .btn-confirm-yes {
@@ -592,7 +594,7 @@
       background: var(--brand);
     }
     .hint, .field-hint {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-2);
       margin-top: 3px;
       line-height: 1.45;
@@ -634,7 +636,7 @@
     }
     label {
       display: block;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       margin-bottom: 4px;
       color: var(--text-2);
@@ -650,7 +652,7 @@
       border-radius: 6px;
       box-sizing: border-box;
       font-family: inherit;
-      font-size: 12px;
+      font-size: 13px;
       transition: all 0.2s ease;
     }
     input:focus, select:focus {
@@ -666,13 +668,139 @@
     .checkbox-label {
       display: flex;
       align-items: flex-start;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-soft);
       margin-bottom: 10px;
       cursor: pointer;
     }
     .checkbox-label input {
       margin-top: 2px;
+    }
+    /* Checkbox + "i" popover button: label and the button are siblings,
+       so clicking "i" never toggles the checkbox (a button nested in
+       <label> would activate it). */
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .checkbox-row .checkbox-label {
+      flex: 1;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    .checkbox-row .info-btn {
+      margin-top: 1px;
+    }
+    /* Row: field label + "i" info button (opens a popover). */
+    .label-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 4px;
+    }
+    .label-row label {
+      margin-bottom: 0;
+    }
+    .info-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      flex: none;
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 50%;
+      color: var(--text-2);
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    .info-btn svg {
+      display: block;
+      pointer-events: none;
+    }
+    .info-btn:hover {
+      color: var(--brand-soft);
+    }
+    .info-btn:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 1px;
+    }
+    .info-btn[aria-expanded="true"] {
+      color: var(--brand-soft);
+    }
+    /* Info popover: one shared element, filled with the i18n key named in
+       data-popover. Larger text (13px) for readability; closes on outside
+       click / Escape (popup.js). */
+    .popover {
+      position: absolute;
+      z-index: 30;
+      max-width: 330px;
+      background: var(--bg-soft);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-soft);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      display: none;
+    }
+    .popover.show {
+      display: block;
+    }
+    /* "Advanced options" (CSS selector, date filtering, cookies) -
+       collapsible, same smooth grid-rows pattern as the settings panel. */
+    .adv-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 7px 10px;
+      margin-bottom: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+    .adv-toggle:hover {
+      color: var(--text-strong);
+      background: var(--bg-soft);
+      border-color: var(--border-strong);
+    }
+    .adv-toggle:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 1px;
+    }
+    .adv-toggle svg {
+      flex: none;
+      transition: transform 0.2s ease;
+    }
+    .adv-toggle[aria-expanded="true"] svg {
+      transform: rotate(180deg);
+    }
+    .adv-section {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows 0.25s ease, opacity 0.25s ease;
+    }
+    .adv-section.open {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+    .adv-section-inner {
+      overflow: hidden;
+      min-height: 0;
     }
     .form-message {
       display: none;
@@ -681,7 +809,7 @@
       color: var(--text);
       border-radius: 6px;
       padding: 7px 10px;
-      font-size: 12px;
+      font-size: 13px;
       margin-bottom: 10px;
       line-height: 1.45;
     }
@@ -711,7 +839,7 @@
        matching the app's button style. */
     .summary-link {
       font: inherit;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
       color: var(--white);
       background: var(--brand-hover);
@@ -819,30 +947,26 @@
     <input type="hidden" id="site-id">
 
     <div class="form-group">
-      <label data-i18n="lblSiteName">Name</label>
+      <div class="label-row">
+        <label data-i18n="lblSiteName">Name</label>
+      </div>
       <input type="text" id="site-name" maxlength="100" placeholder="e.g. News / Store">
     </div>
 
     <div class="form-group">
-      <label data-i18n="lblSiteUrl">URL Address</label>
+      <div class="label-row">
+        <label data-i18n="lblSiteUrl">URL Address</label>
+        <button type="button" class="info-btn" data-popover="hintJs" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        </button>
+      </div>
       <input type="text" id="site-url" placeholder="https://...">
-      <div class="field-hint" data-i18n="hintJs">Only HTML sent by server is checked; JS-rendered content is not checked.</div>
     </div>
 
     <div class="form-group">
-      <label data-i18n="lblOpenUrl">Opened page (optional)</label>
-      <input type="text" id="site-openurl" placeholder="https://...">
-      <div class="field-hint" data-i18n="hintOpenUrl">Opened when you click the card or notification.</div>
-    </div>
-
-    <div class="form-group">
-      <label data-i18n="lblSelector">Page fragment - CSS selector (optional)</label>
-      <input type="text" id="site-selector" placeholder="#content, .results, main">
-      <div class="field-hint" data-i18n="hintSelector">Monitor only the chosen element (works in rendered mode), e.g. the results table - navigation and menus stop generating false changes.</div>
-    </div>
-
-    <div class="form-group">
-      <label data-i18n="lblFreq">Check Frequency</label>
+      <div class="label-row">
+        <label data-i18n="lblFreq">Check Frequency</label>
+      </div>
       <select id="site-freq">
         <option value="0" data-i18n="opt1m">Every 1 minute</option>
         <option value="1" data-i18n="opt5m">Every 5 minutes</option>
@@ -852,37 +976,73 @@
       </select>
     </div>
 
-    <label class="checkbox-label">
-      <input type="checkbox" id="site-ignore-dates" checked>
-      <span data-i18n="chkIgnoreDates">Ignore date and time changes</span>
-    </label>
+    <div class="checkbox-row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="site-notifications" checked>
+        <span data-i18n="chkNotifications">Enable desktop notifications</span>
+      </label>
+      <button type="button" class="info-btn" data-popover="hintNotifications" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      </button>
+    </div>
 
-    <label class="checkbox-label">
-      <input type="checkbox" id="site-cookies">
-      <div>
-        <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
-        <div class="field-hint" data-i18n="hintCookies">Use only if page requires active session/login.</div>
-      </div>
-    </label>
-
-    <label class="checkbox-label">
-      <input type="checkbox" id="site-notifications" checked>
-      <span data-i18n="chkNotifications">Enable desktop notifications</span>
-    </label>
-
-    <label class="checkbox-label">
-      <input type="checkbox" id="site-rendered">
-      <div>
+    <div class="checkbox-row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="site-rendered">
         <span data-i18n="chkRendered">Rendered page mode (JS-rendered sites)</span>
-        <div class="field-hint" data-i18n="hintRendered">Opens the page in a hidden tab and reads what you see. Use for pages that load content with scripts. Slower.</div>
+      </label>
+      <button type="button" class="info-btn" data-popover="hintRendered" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      </button>
+    </div>
+
+    <button type="button" id="btn-advanced" class="adv-toggle" aria-expanded="false" aria-controls="advanced-section">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      <span data-i18n="lblAdvanced">Advanced options</span>
+    </button>
+
+    <div id="advanced-section" class="adv-section">
+      <div class="adv-section-inner">
+        <div class="form-group">
+          <div class="label-row">
+            <label data-i18n="lblSelector">Watch only part of the page (CSS selector)</label>
+            <button type="button" class="info-btn" data-popover="hintSelector" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </div>
+          <input type="text" id="site-selector" placeholder="#content, .results, main">
+        </div>
+
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="site-ignore-dates" checked>
+            <span data-i18n="chkIgnoreDates">Ignore date and time changes</span>
+          </label>
+          <button type="button" class="info-btn" data-popover="hintIgnoreDates" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          </button>
+        </div>
+
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="site-cookies">
+            <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
+          </label>
+          <button type="button" class="info-btn" data-popover="hintCookies" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          </button>
+        </div>
       </div>
-    </label>
+    </div>
 
     <div id="form-message" class="form-message" role="alert"></div>
 
     <button id="btn-save" class="btn-main" data-i18n="btnSave">Save</button>
     <button id="btn-cancel" class="btn-main btn-cancel" data-i18n="btnCancel">Cancel</button>
   </div>
+
+  <!-- Shared info popover: filled by popup.js from TRANSLATIONS[data-popover]. -->
+  <div id="popover" class="popover" role="tooltip" aria-hidden="true"></div>
 
   <script src="i18n.js"></script>
   <script src="storage.js"></script>
