@@ -1,68 +1,167 @@
-\# Web Page Change Monitor
+# Web Page Change Monitor
 
+[PL](#pl) | [EN](#en)
 
+---
 
-!\[Manifest](https://img.shields.io/badge/manifest-v3-green.svg)
+<a name="pl"></a>
 
-!\[License](https://img.shields.io/badge/license-GPLv3-orange.svg)
+## Monitor zmian na stronach internetowych (wersja polska)
 
+**Web Page Change Monitor** to rozszerzenie Chromium (Manifest V3), które cyklicznie sprawdza wybrane strony i powiadamia o zmianach ich treści. Zaprojektowane z myślą o maksymalnej prywatności: bez serwerów pośredniczących, bez kont, bez telemetrii — cała analiza odbywa się lokalnie w Twojej przeglądarce.
 
+### Funkcje
 
-An open-source browser extension built for Chromium-based browsers (Google Chrome, Brave, Microsoft Edge, Opera, etc.) designed for real-time monitoring, state tracking, and interface management.
+- **Monitorowanie do 50 stron** z indywidualną częstotliwością sprawdzania (od 1 minuty do raz na dobę)
+- **Dwa tryby pobierania:**
+  - *Szybki (domyślny)* — pobiera kod HTML z serwera, bez uruchamiania JavaScriptu; lekki i szybki
+  - *Strona renderowana* — otwiera stronę w ukrytej karcie i odczytuje wyrenderowaną treść; dla stron, które rysują zawartość skryptami (SPA, tabele wyników ładowane przez XHR)
+- **Automatyczna detekcja stron JS** — gdy strona ma duży szkielet HTML, ale prawie brak czytelnego tekstu, rozszerzenie podpowiada na karcie włączenie trybu renderowanego
+- **Inteligentne porównywanie:**
+  - pomijanie zmian daty i godziny (opcjonalne, chroni przed fałszywymi alarmami przy znacznikach „ostatnia aktualizacja")
+  - widok różnic linia po linii z wyróżnieniem zmienionych słów
+  - zwijanie niezmienionych fragmentów, tryb „tylko zmiany" (domyślnie włączony), przycisk „Przejdź do zmian"
+  - statystyki +dodane / −usunięte, uczciwy komunikat przy bardzo dużych zmianach (tryb uproszczony)
+- **Powiadomienia** na pulpicie z linkiem do podglądu różnic
+- **Zarządzanie listą:** karty z favikonami, pauzowanie, przeciąganie (drag &amp; drop) ze zapisem kolejności, filtrowanie „tylko ze zmianami", „Oznacz wszystkie jako przeczytane", badge z liczbą zmian na ikonie rozszerzenia
+- **Menu kontekstowe** — „Monitoruj stronę" z poziomu dowolnej strony
+- **Motywy** jasny / ciemny (pełne wsparcie obu, zapamiętywanie wyboru)
+- **Język** PL / EN (cały interfejs, łącznie z powiadomieniami)
+- **Kopia zapasowa ustawień** — eksport/import JSON z pełną walidacją (limit 2 MB, kontrola wersji i duplikatów)
 
+### Instalacja (deweloperska)
 
+1. Pobierz lub sklonuj repozytorium
+2. Otwórz `chrome://extensions`
+3. Włącz „Tryb programisty"
+4. Kliknij „Załaduj rozpakowane" i wskaż katalog z rozszerzeniem
 
-\## 🚀 Key Features
+### Jak używać
 
+1. Kliknij ikonę rozszerzenia lub użyj menu kontekstowego „Monitoruj stronę"
+2. Podaj nazwę, adres URL i częstotliwość sprawdzania
+3. **Otwierana strona (opcjonalnie)** — adres, który otworzy się po kliknięciu karty lub powiadomienia; przydaje się, gdy monitorowany adres jest surowym źródłem danych (endpoint JSON)
+4. Pierwsze sprawdzenie zapisuje stan bazowy; kolejne wykrywają zmiany
+5. Kliknij „Zobacz zmiany" na karcie, aby otworzyć widok różnic
 
+**Wskazówka:** jeśli karta strony pokaże komunikat „Wygląda na rysowaną przez JS", edytuj monitor i zaznacz „Tryb strony renderowanej".
 
-\- ⚡ \*\*Manifest V3 Compliant\*\* – Built using the latest Chromium extensions standard for enhanced security and performance.
+### Prywatność
 
-\- 🔄 \*\*Background Service Worker\*\* – Handles persistent background tasks, alarms, events, and conditional requests (`background.js`).
+- Rozszerzenie **nie wysyła danych nigdzie poza monitorowane przez Ciebie strony**
+- Tryb szybki pobiera stronę tak jak zwykłe żądanie przeglądarki; opcja „Wymagaj ciasteczek" decyduje, czy dołączana jest Twoja sesja
+- Tryb renderowany **zawsze korzysta z sesji przeglądarki** (otwiera realną kartę) — nie da się go uruchomić bez ciasteczek; zakładaj, że strona widzi Cię tak, jak przy zwyknej wizycie
+- Monitorowanie po `http://` z ciasteczkami jest blokowane (ochrona sesji przed zapisem w formie niezaszyfrowanej)
 
-\- 🗂️ \*\*Dynamic Card System \& Drag \& Drop\*\* – Interactive dashboard interface with custom layout organization (`cards.js`, `drag.js`).
+### Uprawnienia i dlaczego
 
-\- 👁️ \*\*Change Preview (diff)\*\* – When a change is detected, the previous and current snapshots are compared line-by-line with word-level highlighting on a dedicated page (`diff.html`, `diff.js`).
+| Uprawnienie | Cel |
+| --- | --- |
+| `storage`, `unlimitedStorage` | lokalny zapis listy stron i snapshotów treści |
+| `alarms` | harmonogram cyklicznych sprawdzeń (MV3) |
+| `notifications` | powiadomienia o wykrytych zmianach |
+| `contextMenus` | pozycja „Monitoruj stronę" |
+| `scripting`, `tabs` | tryb strony renderowanej (ukryta karta, odczyt tekstu) |
+| `favicon` | ikony stron na kartach |
+| `optional_host_permissions` | dostęp do monitorowanych adresów udzielany dopiero po dodaniu strony |
 
-\- 🌐 \*\*Internationalization Support (i18n)\*\* – Built-in localization for English and Polish (`i18n.js`).
+### Struktura projektu
 
-\- 💾 \*\*Storage \& Backup Management\*\* – Persistent data storage with import/export backup capabilities (`storage.js`).
+```
+background.js   — service worker: harmonogram, pobieranie, detekcja zmian, powiadomienia
+popup.html/.js  — interfejs listy i formularza
+cards.js        — renderowanie kart monitorów
+drag.js         — przestawianie kolejności
+diff.html/.js   — strona podglądu różnic
+i18n.js         — tłumaczenia PL/EN
+storage.js      — komunikacja popup ↔ service worker
+manifest.json   — Manifest V3, wersja 1.8.0
+```
 
-\- 🎨 \*\*Popup Interface\*\* – Clean and responsive popup UI managed via `popup.html` and `popup.js`.
+Bez zależności zewnętrznych; do developmentu: ESLint (`npm run lint`).
 
+### Licencja
 
+GPL-3.0 — szczegóły w pliku `LICENSE`.
 
-\## 🛠️ Project Structure
+---
 
+<a name="en"></a>
 
+## Web Page Change Monitor (English)
 
-```text
+**Web Page Change Monitor** is a Chromium extension (Manifest V3) that periodically checks selected pages and notifies you when their content changes. Privacy-first by design: no middleman servers, no accounts, no telemetry — all analysis happens locally in your browser.
 
-.
+### Features
 
-├── manifest.json              # Extension manifest (Manifest V3 configuration)
+- **Monitor up to 50 pages**, each with its own check frequency (from 1 minute to once a day)
+- **Two fetching modes:**
+  - *Fast (default)* — fetches the HTML sent by the server, without running JavaScript; light and quick
+  - *Rendered page mode* — opens the page in a hidden tab and reads the rendered content; for pages that draw their content with scripts (SPAs, XHR-loaded result tables)
+- **Automatic JS-page detection** — when a page returns a large HTML shell but almost no readable text, the card suggests enabling rendered mode
+- **Smart comparison:**
+  - optional ignoring of date/time changes (protects against false alarms from "last updated" stamps)
+  - line-by-line diff view with changed words highlighted
+  - collapsing of unchanged runs, "only changes" view (on by default), "Jump to changes" button
+  - +added / −removed statistics, honest notice for very large changes (simplified mode)
+- **Desktop notifications** linking to the diff view
+- **List management:** cards with favicons, pausing, drag &amp; drop reordering with persisted order, "only changed" filter, "Mark all as read", unread-count badge on the extension icon
+- **Context menu** — "Monitor this page" from any page
+- **Light / dark themes** (full support for both, choice persisted)
+- **PL / EN language** (whole UI, including notifications)
+- **Settings backup** — JSON export/import with full validation (2 MB limit, version and duplicate checks)
 
-├── background.js              # Background service worker script
+### Installation (developer mode)
 
-├── popup.html                 # Main extension popup view
+1. Download or clone the repository
+2. Open `chrome://extensions`
+3. Enable "Developer mode"
+4. Click "Load unpacked" and point to the extension directory
 
-├── popup.js                   # Popup interface logic and event handling
+### Usage
 
-├── storage.js                 # Messaging wrappers for the service worker
+1. Click the extension icon, or use the "Monitor this page" context menu
+2. Provide a name, URL and check frequency
+3. **Opened page (optional)** — the address that opens when you click the card or a notification; useful when the monitored URL is a raw data endpoint (JSON)
+4. The first check stores a baseline; subsequent checks detect changes
+5. Click "View changes" on a card to open the diff view
 
-├── cards.js                   # UI card component generation and state rendering
+**Tip:** if a card shows "Looks JS-rendered", edit the monitor and enable "Rendered page mode".
 
-├── drag.js                    # Drag-and-drop interaction functionality
+### Privacy
 
-├── i18n.js                    # Localization (EN/PL)
+- The extension **never sends data anywhere except the pages you monitor**
+- Fast mode fetches the page like a regular browser request; the "Require cookies" option decides whether your session is included
+- Rendered mode **always uses your browser session** (it opens a real tab) and cannot run cookieless — assume the page sees you as on a normal visit
+- Monitoring `http://` pages with cookies is blocked (protects your session)
 
-├── diff.html                  # Change preview page
+### Permissions and why
 
-├── diff.js                    # Diff rendering (LCS on lines + word diff)
+| Permission | Purpose |
+| --- | --- |
+| `storage`, `unlimitedStorage` | local storage of the site list and content snapshots |
+| `alarms` | recurring check schedule (MV3) |
+| `notifications` | change notifications |
+| `contextMenus` | the "Monitor this page" entry |
+| `scripting`, `tabs` | rendered page mode (hidden tab, text reading) |
+| `favicon` | site icons on cards |
+| `optional_host_permissions` | access to monitored origins, granted only after you add a page |
 
-├── eslint.config.js           # ESLint configuration for code quality
+### Project structure
 
-├── package.json               # Node.js dependencies and project scripts
+```
+background.js   — service worker: scheduling, fetching, change detection, notifications
+popup.html/.js  — list and form UI
+cards.js        — monitor card rendering
+drag.js         — drag & drop reordering
+diff.html/.js   — diff view page
+i18n.js         — PL/EN translations
+storage.js      — popup ↔ service worker messaging
+manifest.json   — Manifest V3, version 1.8.0
+```
 
-└── icon16.png / 48 / 128      # Extension icons
+No external dependencies; for development: ESLint (`npm run lint`).
 
+### License
+
+GPL-3.0 — see `LICENSE` for details.
