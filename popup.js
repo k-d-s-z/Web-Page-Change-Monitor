@@ -43,15 +43,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   updateLangButtonsUI();
   applyTranslations();
-  renderSites();
+  await renderSites();
 
   await maybeOpenPendingAdd();
   await maybeRestorePicker();
+  maybeShowChangedHint();
 
   document.getElementById('btn-add-view').addEventListener('click', () => showForm());
   document.getElementById('btn-cancel').addEventListener('click', () => showList());
   document.getElementById('btn-save').addEventListener('click', saveSite);
   document.getElementById('btn-pick').addEventListener('click', startPicker);
+  document.getElementById('site-rendered').addEventListener('change', syncRenderedUI);
   document.getElementById('btn-refresh-all').addEventListener('click', refreshAll);
   document.getElementById('btn-mark-read').addEventListener('click', markAllRead);
   document.getElementById('btn-settings').addEventListener('click', () => toggleSettingsPanel());
@@ -407,6 +409,36 @@ async function maybeOpenPendingAdd() {
   showForm(null, { url: pending.url, name: suggestedName });
 }
 
+// Unread changes: remind the user right after opening the popup and offer the
+// "changed only" filter (same one the batch summary uses).
+async function maybeShowChangedHint() {
+  const t = TRANSLATIONS[currentLang];
+  const data = await chrome.storage.local.get('sites');
+  const n = (data.sites || []).filter((s) => s.hasChanged && !s.isPaused).length;
+  if (n === 0 || changedOnly) return;
+  showSummaryNodes([
+    summaryText(`${t.unreadChanges}: ${n} \u2022 `),
+    summaryButton(t.showChanged, async () => {
+      changedOnly = true;
+      await renderSites();
+      showFilterSummary();
+    })
+  ], 'warn', 0);
+}
+
+// Rendered mode opens a real tab and always uses the browser session, so the
+// form reflects that: cookies ticked and locked, 1-minute interval unavailable.
+function syncRenderedUI() {
+  const rendered = document.getElementById('site-rendered').checked;
+  const cookies = document.getElementById('site-cookies');
+  const freq = document.getElementById('site-freq');
+  if (rendered) cookies.checked = true;
+  cookies.disabled = rendered;
+  const oneMin = freq.querySelector('option[value="0"]');
+  if (oneMin) oneMin.disabled = rendered;
+  if (rendered && freq.value === '0') freq.value = '1';
+}
+
 function showFormMessage(text, kind = 'error') {
   const box = document.getElementById('form-message');
   box.textContent = text;
@@ -450,6 +482,8 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-notifications').checked = true;
     document.getElementById('site-rendered').checked = false;
   }
+
+  syncRenderedUI();
 
   if (prefill) {
     const nameField = document.getElementById('site-name');
@@ -530,6 +564,7 @@ function applyPickerDraft(draft) {
   document.getElementById('site-cookies').checked = Boolean(draft.requireCookies);
   document.getElementById('site-notifications').checked = draft.enableNotifications !== false;
   document.getElementById('site-rendered').checked = Boolean(draft.renderMode);
+  syncRenderedUI();
 }
 
 // The picked element is drawn by scripts (absent from the server HTML): the
@@ -538,6 +573,7 @@ function applyNeedsRendered(picked) {
   if (!picked.needsRendered) return false;
   document.getElementById('site-rendered').checked = true;
   document.getElementById('site-cookies').checked = true; // rendered mode always uses the session
+  syncRenderedUI();
   return true;
 }
 
@@ -695,6 +731,22 @@ async function saveSite() {
     return;
   }
 
+  // Ask for the host permission FIRST (still inside the click's user gesture)
+  // so a refusal never leaves a half-saved page behind.
+  let granted = false;
+  try {
+    granted = await chrome.permissions.request({
+      origins: [`${urlObj.protocol}//${urlObj.host}/*`]
+    });
+  } catch (err) {
+    showFormMessage(t.alertInvalidUrl);
+    return;
+  }
+  if (!granted) {
+    showFormMessage(t.alertPermissionReq);
+    return;
+  }
+
   const res = await callBackground({
     action: 'saveSite',
     site: { id, name, url, freqIndex, ignoreDates, requireCookies, enableNotifications, renderMode, selector }
@@ -702,22 +754,6 @@ async function saveSite() {
 
   if (!res.ok) {
     showFormMessage(saveErrorMessage(res));
-    return;
-  }
-
-  try {
-    const granted = await chrome.permissions.request({
-      origins: [`${urlObj.protocol}//${urlObj.host}/*`]
-    });
-
-    if (!granted) {
-      if (!id) await callBackground({ action: 'deleteSite', siteId: res.siteId });
-      showFormMessage(t.alertPermissionReq);
-      return;
-    }
-  } catch (err) {
-    if (!id) await callBackground({ action: 'deleteSite', siteId: res.siteId });
-    showFormMessage(t.alertInvalidUrl);
     return;
   }
 

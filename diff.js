@@ -34,7 +34,6 @@ const STR = {
     onlyChanges: 'Show only changes',
     diffSimplified: 'Large change - the comparison is simplified: all lines are shown as replaced.',
     statsReplaced: 'Lines',
-    jumpToChanges: 'Jump to changes',
   },
   pl: {
     title: 'Szczeg\u00f3\u0142y zmiany \u2014 Web Page Change Monitor',
@@ -51,7 +50,6 @@ const STR = {
     onlyChanges: 'Poka\u017c tylko zmiany',
     diffSimplified: 'Du\u017ca zmiana - por\u00f3wnanie uproszczone: wszystkie linie pokazano jako wymienione.',
     statsReplaced: 'Linie',
-    jumpToChanges: 'Przejd\u017a do zmian',
   }
 };
 
@@ -73,6 +71,7 @@ function computeOps(a, b) {
     const ops = [];
     a.forEach((l) => ops.push({ t: 'del', l }));
     b.forEach((l) => ops.push({ t: 'ins', l }));
+    ops.simplified = true;
     return ops;
   }
 
@@ -212,7 +211,7 @@ function renderDiff(oldLines, newLines, t, onlyChanges) {
     html += g.lines.slice(n - tail).map(eqLine).join('');
   });
 
-  return { html, skipped, added, removed };
+  return { html, skipped, added, removed, simplified: Boolean(ops.simplified) };
 }
 
 // Podpina rozwijanie zwini\u0119tych fragment\u00f3w (klik / Enter/Spacja).
@@ -303,18 +302,6 @@ async function main() {
   if (onlyEl) {
     onlyEl.checked = true; // default view: only changed lines
     onlyEl.addEventListener('change', () => render(onlyEl.checked));
-  }
-  // D2: "Jump to changes" - skip long unchanged context before the first edit.
-  const jumpEl = document.getElementById('jump');
-  if (jumpEl) {
-    jumpEl.textContent = t.jumpToChanges;
-    const hasChanges = () => box.querySelector('.diff-line.added, .diff-line.removed');
-    jumpEl.hidden = !hasChanges();
-    jumpEl.addEventListener('click', () => {
-      const first = box.querySelector('.diff-line.added, .diff-line.removed');
-      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      jumpEl.hidden = true;
-    });
   }
   render(onlyEl ? onlyEl.checked : false);
 }

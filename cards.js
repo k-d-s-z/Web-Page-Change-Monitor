@@ -55,6 +55,22 @@ function formatLastCheck(timestamp) {
     : date.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+// Maps raw error messages from background.js to short, translated labels.
+function errorLabel(raw, t) {
+  const msg = String(raw || '');
+  const http = msg.match(/^HTTP (\d{3})/);
+  if (http) return `HTTP ${http[1]}`;
+  if (/^Timeout/i.test(msg)) return t.errTimeout;
+  if (/^Selector not found/i.test(msg)) return t.errSelectorNotFound;
+  if (/^Invalid selector/i.test(msg)) return t.errSelectorInvalid;
+  if (/login page/i.test(msg)) return t.errLoginRequired;
+  if (/too large/i.test(msg)) return t.errTooLarge;
+  if (/produced no text/i.test(msg)) return t.errNoText;
+  if (/Tab closed/i.test(msg)) return t.errTabClosed;
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return t.errNetwork;
+  return msg.length > 40 ? msg.slice(0, 40) + '\u2026' : (msg || t.checkError);
+}
+
 function buildCard(site, flash = null) {
   const t = TRANSLATIONS[currentLang];
   const card = document.createElement('div');
@@ -68,8 +84,10 @@ function buildCard(site, flash = null) {
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
   const lastCheck = site.lastCheckTime ? formatLastCheck(site.lastCheckTime) : '&mdash;';
 
+  // Short, human-readable reason right on the card; the raw message stays in
+  // the tooltip for debugging.
   const errorHtml = site.lastError
-    ? ` &bull; <span class="meta-error" title="${escapeHtml(site.lastError)}">${ICONS.warning} ${t.checkError}</span>`
+    ? ` &bull; <span class="meta-error" title="${escapeHtml(site.lastError)}">${ICONS.warning} ${escapeHtml(errorLabel(site.lastError, t))}</span>`
     : '';
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
@@ -82,7 +100,9 @@ function buildCard(site, flash = null) {
   const suggestHtml = site.suggestRendered
     ? ` &bull; <span class="badge-suggest">${t.suggestRendered}</span>`
     : '';
-  const diffHtml = site.hasChanged && site.prevSnapshot
+  // The link stays as long as a stored previous version exists (not only while
+  // the change is unread) - opening the page must not remove access to the diff.
+  const diffHtml = site.prevSnapshot && site.changedAt
     ? ` &bull; <a href="#" class="link-diff" title="${t.titleDiff}">${t.linkDiff}</a>`
     : '';
 
@@ -138,7 +158,7 @@ function buildCard(site, flash = null) {
 
   card.querySelector('.btn-delete').addEventListener('click', (e) => {
     e.stopPropagation();
-    enterDeleteConfirm(card, site);
+    deleteSite(site.id); // no confirm step: the Undo summary covers mistakes
   });
 
   const diffEl = card.querySelector('.link-diff');
@@ -189,47 +209,6 @@ async function refreshCard(siteId, flash = null) {
 
   card.replaceWith(buildCard(site, flash));
   if (flash && flash.text) announce(flash.text);
-}
-
-function enterDeleteConfirm(card, site) {
-  const t = TRANSLATIONS[currentLang];
-
-  document.querySelectorAll('.site-card.confirming').forEach((c) => {
-    if (c !== card) refreshCard(c.dataset.id);
-  });
-
-  card.classList.add('confirming');
-  card.innerHTML = `
-    <div class="confirm-text">
-      <div class="confirm-name">${escapeHtml(site.name)}</div>
-      <div>${t.confirmDelete}</div>
-    </div>
-    <div class="actions">
-      <button class="btn-icon btn-confirm-yes">${t.btnYes}</button>
-      <button class="btn-icon btn-confirm-no">${t.btnNo}</button>
-    </div>
-  `;
-
-  card.querySelector('.btn-confirm-yes').addEventListener('click', (e) => {
-    e.stopPropagation();
-    deleteSite(site.id);
-  });
-
-  const noBtn = card.querySelector('.btn-confirm-no');
-  noBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    refreshCard(site.id);
-  });
-  noBtn.focus();
-
-  // A3: Escape anuluje potwierdzenie usuwania (karta i tak jest
-  // przebudowywana przez refreshCard, wi\u0119c listener znika razem z ni\u0105).
-  card.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    e.stopPropagation();
-    e.preventDefault();
-    refreshCard(site.id);
-  });
 }
 
 async function renderSites() {
