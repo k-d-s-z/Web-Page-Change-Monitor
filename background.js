@@ -441,8 +441,26 @@ function fetchRendered(url, requireCookies, selector) {
 
 async function fetchRenderedInner(url, requireCookies, selector) {
   let tabId = null;
+  let windowId = null;
   try {
-    tabId = (await chrome.tabs.create({ url, active: false })).id;
+    // Preferred: a separate MINIMIZED window, so nothing appears in the tab
+    // strip of the user's current window and no focus is stolen. Fallback
+    // (window creation refused): a background tab, as before.
+    try {
+      const win = await chrome.windows.create({ url, state: 'minimized', focused: false });
+      windowId = win.id;
+      tabId = win.tabs && win.tabs[0] ? win.tabs[0].id : null;
+      if (tabId == null) {
+        const tabs = await chrome.tabs.query({ windowId });
+        tabId = tabs[0] ? tabs[0].id : null;
+      }
+    } catch (e) {
+      windowId = null;
+      tabId = null;
+    }
+    if (tabId == null) {
+      tabId = (await chrome.tabs.create({ url, active: false })).id;
+    }
 
     // P1 (audit): single cleanup path - removes the listener AND the timer
     // whether the tab completes, the timeout fires, or the tab dies early.
@@ -487,7 +505,9 @@ async function fetchRenderedInner(url, requireCookies, selector) {
     if (!text.trim()) throw new Error('Rendered page produced no text');
     return { notModified: false, text, etag: null, lastModified: null };
   } finally {
-    if (tabId !== null) {
+    if (windowId !== null) {
+      try { await chrome.windows.remove(windowId); } catch (e) { /* already gone */ }
+    } else if (tabId !== null) {
       try { await chrome.tabs.remove(tabId); } catch (e) { /* already gone */ }
     }
   }
