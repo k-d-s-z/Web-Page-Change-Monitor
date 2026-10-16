@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-cancel').addEventListener('click', () => showList());
   document.getElementById('btn-save').addEventListener('click', saveSite);
   document.getElementById('btn-refresh-all').addEventListener('click', refreshAll);
+  document.getElementById('btn-mark-read').addEventListener('click', markAllRead);
   document.getElementById('btn-settings').addEventListener('click', () => toggleSettingsPanel());
   document.getElementById('btn-close-settings').addEventListener('click', () => toggleSettingsPanel(false));
   document.getElementById('btn-backup').addEventListener('click', createBackup);
@@ -472,9 +473,9 @@ async function saveSite() {
   const openUrl = document.getElementById('site-openurl').value.trim();
   const freqIndex = parseInt(document.getElementById('site-freq').value, 10);
   const ignoreDates = document.getElementById('site-ignore-dates').checked;
-  const requireCookies = document.getElementById('site-cookies').checked;
-  const enableNotifications = document.getElementById('site-notifications').checked;
   const renderMode = document.getElementById('site-rendered').checked ? 'rendered' : 'fast';
+  const requireCookies = document.getElementById('site-cookies').checked || renderMode === 'rendered'; // rendered always uses the browser session
+  const enableNotifications = document.getElementById('site-notifications').checked;
 
   if (!name || !url) {
     showFormMessage(t.alertFillFields);
@@ -534,6 +535,13 @@ async function saveSite() {
   if (res.needsBaseline) triggerCheck(res.siteId);
 }
 
+
+// "Mark all as read": clears the unread-change flag on every card.
+async function markAllRead() {
+  await callBackground({ action: 'markAllRead' });
+  changedOnly = false;
+  await renderSites();
+}
 async function togglePause(siteId) {
   await callBackground({ action: 'toggleSite', siteId });
   renderSites();

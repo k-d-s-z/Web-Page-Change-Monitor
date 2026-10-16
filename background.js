@@ -397,6 +397,9 @@ async function fetchHtml(url, requireCookies, signal, conditional) {
 
 let rendererBusy = Promise.resolve();
 
+// Note: rendered mode ALWAYS uses the browser session (cookies included) -
+// chrome.tabs.create cannot open an isolated/cookieless context. The UI
+// communicates this and saveSite forces requireCookies=true for this mode.
 function fetchRendered(url, requireCookies) {
   // Serialize: every rendered check waits for the previous one.
   const run = rendererBusy.then(() => fetchRenderedInner(url, requireCookies));
@@ -410,21 +413,29 @@ async function fetchRenderedInner(url, requireCookies) {
   try {
     tabId = (await chrome.tabs.create({ url, active: false })).id;
 
-    // Wait for full load, then a short grace period for XHR-driven content.
+    // P1 (audit): single cleanup path - removes the listener AND the timer
+    // whether the tab completes, the timeout fires, or the tab dies early.
     await new Promise((resolve) => {
-      const started = Date.now();
-      const listener = (tabId_, info) => {
-        if (tabId_ === tabId && info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          resolve();
-        }
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
       };
+      const listener = (tabId_, info) => {
+        if (tabId_ === tabId && info.status === 'complete') finish();
+      };
+      const timer = setTimeout(finish, RENDER_LOAD_TIMEOUT_MS);
       chrome.tabs.onUpdated.addListener(listener);
-      // Safety: do not hang forever if 'complete' never fires.
-      setTimeout(resolve, RENDER_LOAD_TIMEOUT_MS - (Date.now() - started));
     });
     await new Promise((resolve) => setTimeout(resolve, RENDER_GRACE_MS));
 
+    // The tab may have been closed by the user or the browser meanwhile -
+    // verify it still exists before injecting the script.
+    try { await chrome.tabs.get(tabId); }
+    catch (e) { throw new Error('Tab closed before reading'); }
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => (document.body ? document.body.innerText : ''),
@@ -797,6 +808,10 @@ async function handleSaveSite(msg) {
       ignoreDates: input.ignoreDates,
       requireCookies: input.requireCookies,
       enableNotifications: input.enableNotifications,
+      // P1 (audit): rendered mode opens the page in a real tab, which always
+      // uses the browser session/cookies - "omit cookies" cannot be honored.
+      // Force the flag so no code path promises cookie-free monitoring here.
+      requireCookies: input.renderMode === 'rendered' ? true : input.requireCookies,
       renderMode: input.renderMode,
       openUrl: input.openUrl
     };
@@ -987,6 +1002,7 @@ async function handleUndoDelete(msg) {
   });
 
   await setupAlarms();
+  await updateBadge(); // keep the badge in sync right after the restore
   return outcome;
 }
 // "Mark all as read": clears hasChanged on every site at once.

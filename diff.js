@@ -32,6 +32,8 @@ const STR = {
     added: 'added',
     removed: 'removed',
     onlyChanges: 'Only changes',
+    diffSimplified: 'Large change - the comparison is simplified: all lines are shown as replaced.',
+    statsReplaced: 'lines: previous vs current',
     jumpToChanges: 'Jump to changes',
   },
   pl: {
@@ -47,6 +49,8 @@ const STR = {
     added: 'dodane',
     removed: 'usuni\u0119te',
     onlyChanges: 'Tylko zmiany',
+    diffSimplified: 'Du\u017ca zmiana - por\u00f3wnanie uproszczone: wszystkie linie pokazano jako wymienione.',
+    statsReplaced: 'linie: poprzednia vs nowa wersja',
     jumpToChanges: 'Przejd\u017a do zmian',
   }
 };
@@ -279,21 +283,25 @@ async function main() {
   // Przerenderowuje widok bez przeladowania strony.
   const statsEl = document.getElementById('stats');
   const render = (onlyChanges) => {
-    const { html, skipped, added, removed } = renderDiff(oldLines, newLines, t, onlyChanges);
+    const { html, skipped, added, removed, simplified } = renderDiff(oldLines, newLines, t, onlyChanges);
 
-    // Statystyki w pasku narzedzi: +dodane / -usuniete.
+    // Stats: real +added/-removed, but when the LCS fallback kicked in the
+    // counters would massively overstate the change (identical lines shown
+    // as replaced) - show line counts instead.
     if (statsEl) {
-      statsEl.innerHTML =
-        `<span class="stat-add" title="${t.added}">+${added}</span>` +
-        `<span class="stat-del" title="${t.removed}">\u2212${removed}</span>`;
+      statsEl.innerHTML = simplified
+        ? `<span class="stat-add" title="${t.statsReplaced}">${oldLines.length} \u2192 ${newLines.length}</span>`
+        : `<span class="stat-add" title="${t.added}">+${added}</span>` +
+          `<span class="stat-del" title="${t.removed}">\u2212${removed}</span>`;
     }
-
-    box.innerHTML = html || `<span class="empty">${t.noChanges}</span>`;
+    const notice = simplified ? '<span class="diff-skip" style="display:block;margin-bottom:6px">' + t.diffSimplified + ' (' + oldLines.length + ' \u2192 ' + newLines.length + ')</span>' : '';
+    box.innerHTML = notice + (html || `<span class="empty">${t.noChanges}</span>`);
     wireSkipToggle(box, skipped);
   };
 
   const onlyEl = document.getElementById('only-changes');
   if (onlyEl) {
+    onlyEl.checked = true; // default view: only changed lines
     onlyEl.addEventListener('change', () => render(onlyEl.checked));
   }
   // D2: "Jump to changes" - skip long unchanged context before the first edit.
@@ -308,7 +316,7 @@ async function main() {
       jumpEl.hidden = true;
     });
   }
-  render(false);
+  render(onlyEl ? onlyEl.checked : false);
 }
 
 

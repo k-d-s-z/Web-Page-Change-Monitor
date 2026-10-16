@@ -80,7 +80,7 @@ function buildCard(site, flash = null) {
   // Heuristic flag: the page shell is large but readable text is tiny ->
   // suggest switching to rendered mode (JS draws the content).
   const suggestHtml = site.suggestRendered
-    ? ` &bull; <span class="meta-flash warn">${t.suggestRendered}</span>`
+    ? ` &bull; <span class="badge-suggest">${t.suggestRendered}</span>`
     : '';
   const diffHtml = site.hasChanged && site.prevSnapshot
     ? ` &bull; <a href="#" class="link-diff" title="${t.titleDiff}">${t.linkDiff}</a>`
