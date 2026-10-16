@@ -400,15 +400,15 @@ let rendererBusy = Promise.resolve();
 // Note: rendered mode ALWAYS uses the browser session (cookies included) -
 // chrome.tabs.create cannot open an isolated/cookieless context. The UI
 // communicates this and saveSite forces requireCookies=true for this mode.
-function fetchRendered(url, requireCookies) {
+function fetchRendered(url, requireCookies, selector) {
   // Serialize: every rendered check waits for the previous one.
-  const run = rendererBusy.then(() => fetchRenderedInner(url, requireCookies));
+  const run = rendererBusy.then(() => fetchRenderedInner(url, requireCookies, selector));
   // Keep the queue alive even if one check fails.
   rendererBusy = run.then(() => undefined, () => undefined);
   return run;
 }
 
-async function fetchRenderedInner(url, requireCookies) {
+async function fetchRenderedInner(url, requireCookies, selector) {
   let tabId = null;
   try {
     tabId = (await chrome.tabs.create({ url, active: false })).id;
@@ -438,10 +438,21 @@ async function fetchRenderedInner(url, requireCookies) {
     catch (e) { throw new Error('Tab closed before reading'); }
     const results = await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => (document.body ? document.body.innerText : ''),
+      // With a CSS selector only that fragment is captured (e.g. the results
+      // table) - navigation and other page chrome stop generating false diffs.
+      // Returns null when the selector matches nothing: treated as an error,
+      // not as an empty snapshot (never commit a bogus "change").
+      func: (sel) => {
+        const root = sel ? document.querySelector(sel) : document.body;
+        return root ? (root.innerText || '') : null;
+      },
+      args: [selector || null],
       // Default ISOLATED world is enough to read innerText and safer than MAIN.
     });
     const text = (results && results[0] && results[0].result) || '';
+    if (selector && results && results[0] && results[0].result === null) {
+      throw new Error('Selector not found on page');
+    }
     if (!text.trim()) throw new Error('Rendered page produced no text');
     return { notModified: false, text, etag: null, lastModified: null };
   } finally {
@@ -571,7 +582,7 @@ async function runCheck(siteId) {
     // Rendered mode: read the page as the user SEES it (hidden tab + JS).
     // Fast mode (default): plain fetch of the server response.
     const fetchResult = site.renderMode === 'rendered'
-      ? await fetchRendered(site.url, site.requireCookies)
+      ? await fetchRendered(site.url, site.requireCookies, site.selector)
       : await fetchHtml(site.url, site.requireCookies, controller.signal, conditional);
 
     // Snapshot do podgl\u0105du zmian (U1) \u2014 liczony tylko przy pe\u0142nym pobraniu;
@@ -767,6 +778,14 @@ function sanitizeSiteInput(raw) {
     }
   }
 
+  // Optional CSS selector: monitor only a fragment of the page (e.g. the
+  // results table), not the whole body incl. navigation. Applies to the
+  // rendered mode; the fast mode ignores it.
+  let selector = String(s.selector || '').trim().slice(0, 200);
+  if (selector && !/^[a-zA-Z0-9 #.\[\]:\-_>"'=()~*,+|^$\\\/]+$/.test(selector)) {
+    selector = '';
+  }
+
   return {
     name,
     url,
@@ -775,6 +794,7 @@ function sanitizeSiteInput(raw) {
     requireCookies,
     enableNotifications: Boolean(s.enableNotifications),
     renderMode: s.renderMode === 'rendered' ? 'rendered' : 'fast',
+    selector,
     openUrl: openUrl || url
   };
 }
@@ -813,6 +833,7 @@ async function handleSaveSite(msg) {
       // Force the flag so no code path promises cookie-free monitoring here.
       requireCookies: input.renderMode === 'rendered' ? true : input.requireCookies,
       renderMode: input.renderMode,
+      selector: input.selector,
       openUrl: input.openUrl
     };
 

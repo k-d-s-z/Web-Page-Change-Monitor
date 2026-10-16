@@ -422,6 +422,7 @@ function showForm(site = null, prefill = null) {
     // (no need to clutter the field with a URL copy during plain edits).
     document.getElementById('site-openurl').value =
       (site.openUrl && site.openUrl !== site.url) ? site.openUrl : '';
+    document.getElementById('site-selector').value = site.selector || '';
     document.getElementById('site-freq').value = site.freqIndex;
     document.getElementById('site-ignore-dates').checked = site.ignoreDates !== false;
     document.getElementById('site-cookies').checked = site.requireCookies !== false;
@@ -433,6 +434,7 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-name').value = prefill ? prefill.name || '' : '';
     document.getElementById('site-url').value = prefill ? prefill.url || '' : '';
     document.getElementById('site-openurl').value = '';
+    document.getElementById('site-selector').value = '';
     document.getElementById('site-freq').value = DEFAULT_FREQ_INDEX;
     document.getElementById('site-ignore-dates').checked = true;
     document.getElementById('site-cookies').checked = false;
@@ -471,6 +473,7 @@ async function saveSite() {
   const name = document.getElementById('site-name').value.trim();
   let url = document.getElementById('site-url').value.trim();
   const openUrl = document.getElementById('site-openurl').value.trim();
+  const selector = document.getElementById('site-selector').value.trim();
   const freqIndex = parseInt(document.getElementById('site-freq').value, 10);
   const ignoreDates = document.getElementById('site-ignore-dates').checked;
   const renderMode = document.getElementById('site-rendered').checked ? 'rendered' : 'fast';
@@ -507,7 +510,7 @@ async function saveSite() {
 
   const res = await callBackground({
     action: 'saveSite',
-    site: { id, name, url, openUrl, freqIndex, ignoreDates, requireCookies, enableNotifications, renderMode }
+    site: { id, name, url, openUrl, freqIndex, ignoreDates, requireCookies, enableNotifications, renderMode, selector }
   });
 
   if (!res.ok) {
