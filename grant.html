@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Web Page Change Monitor</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #09090E;
+      color: #F3F4F6;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .box {
+      max-width: 520px;
+      padding: 32px;
+      background: #18181F;
+      border: 1px solid #2B2B36;
+      border-radius: 14px;
+      text-align: center;
+    }
+    h1 { font-size: 20px; margin: 0 0 12px; color: #FFF; }
+    p { font-size: 14px; line-height: 1.55; color: #C7CED6; margin: 0 0 18px; }
+    .host {
+      font-weight: 600;
+      color: #FFF;
+      background: #23232F;
+      border: 1px solid #3B3B4A;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 0 0 22px;
+      word-break: break-all;
+    }
+    button {
+      font-size: 15px;
+      font-weight: 600;
+      color: #FFF;
+      background: #8352F0;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 28px;
+      cursor: pointer;
+    }
+    button:hover { background: #8B5CF6; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    .status { margin-top: 18px; font-size: 14px; min-height: 20px; }
+    .status.ok { color: #34D399; }
+    .status.err { color: #F87171; }
+    .hint { margin-top: 8px; font-size: 12.5px; color: #9CA3AF; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1 id="grant-title">Grant access</h1>
+    <p id="grant-text"></p>
+    <div id="grant-host" class="host"></div>
+    <button id="grant-btn" type="button">Allow access</button>
+    <div id="grant-status" class="status"></div>
+    <div id="grant-hint" class="hint" style="display: none;"></div>
+  </div>
+  <script src="i18n.js"></script>
+  <script src="grant.js"></script>
+</body>
+</html>

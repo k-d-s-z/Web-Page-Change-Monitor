@@ -251,6 +251,11 @@ async function wizardNext() {
     let urlObj;
     try { urlObj = new URL(url); } catch (err) { showWizardMessage(t.alertInvalidUrl); return; }
 
+    s.name = name;
+    s.url = url;
+    s.renderChecked = false;
+    saveWizardDraft(); // step stays 1: name/url must reach the restored wizard
+
     // Duplicate check right at the first step - walking the whole wizard just
     // to hear "already on the list" at the end would waste the user's time.
     {
@@ -259,31 +264,44 @@ async function wizardNext() {
       const dup = (data.sites || []).some((x) => {
         try { return new URL(x.url).href === identity; } catch (e) { return false; }
       });
-      if (dup) { showWizardMessage(t.errDuplicate); return; }
+      if (dup) {
+        showWizardMessage(t.errDuplicate);
+        return;
+      }
     }
 
-    // Persist FIRST (step 2, detection pending): if the permission dialog
-    // closes this popup, the wizard resumes on the next open instead of
-    // making the user start over.
-    s.name = name;
-    s.url = url;
-    s.renderChecked = false;
-    wizardGo(2);
-
-    // Host permission must be requested inside the click gesture.
+    // Per-site consent CANNOT be requested from this popup: the permission
+    // dialog always closes the popup (Chrome limitation), killing the flow.
+    // So the consent lives in a dedicated extension TAB (grant.html), which
+    // survives the dialog; after granting, that tab reopens the popup and
+    // the wizard continues at step 2 (see maybeRestoreWizard).
     const pattern = `${urlObj.protocol}//${urlObj.host}/*`;
     let granted = false;
-    try {
-      granted = await chrome.permissions.contains({ origins: [pattern] })
-        || await chrome.permissions.request({ origins: [pattern] });
-    } catch (err) { granted = false; }
-    if (!granted) {
-      showWizardMessage(t.alertPermissionReq);
-      wizardGo(1);
+    try { granted = await chrome.permissions.contains({ origins: [pattern] }); }
+    catch (err) { granted = false; }
+
+    if (granted) {
+      wizardGo(2);
+      await runWizardDetection();
       return;
     }
 
-    await runWizardDetection();
+    // Save the draft with pendingPermission, open the consent tab, and close
+    // the popup - the tab is now the active surface.
+    try {
+      const data = await chrome.storage.local.get('wizardDraft');
+      const draft = data.wizardDraft;
+      if (draft && draft.url === url) {
+        draft.pendingPermission = true;
+        draft.permissionGranted = false;
+        draft.ts = Date.now();
+        await chrome.storage.local.set({ wizardDraft: draft });
+      }
+    } catch (err) { /* draft is best-effort */ }
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('grant.html') + '#' + encodeURIComponent(pattern)
+    });
+    window.close();
     return;
   }
 
@@ -347,6 +365,8 @@ async function wizardPick() {
   const t = TRANSLATIONS[currentLang];
 
   const pattern = `${new URL(s.url).origin}/*`;
+  // contains() first: with install-time host_permissions it is always true,
+  // so the request dialog (which closes this popup) never triggers.
   let granted = false;
   try {
     granted = await chrome.permissions.contains({ origins: [pattern] })
@@ -443,6 +463,23 @@ async function maybeRestoreWizard() {
   document.getElementById('view-wizard').style.display = 'block';
   renderWizard();
 
+  if (wizardState.step === 1 && d.pendingPermission) {
+    // The consent tab just granted access (or the popup was closed with the
+    // consent still pending). Granted -> continue to step 2 automatically;
+    // denied/abandoned -> stay at step 1 so "Next" re-opens the consent tab.
+    let pattern = '';
+    try { pattern = `${new URL(d.url).protocol}//${new URL(d.url).host}/*`; } catch (err) { pattern = ''; }
+    let granted = false;
+    try { granted = !!pattern && await chrome.permissions.contains({ origins: [pattern] }); }
+    catch (err) { granted = false; }
+    if (granted) {
+      wizardState.renderChecked = false;
+      wizardGo(2);
+      await runWizardDetection();
+    }
+    return true;
+  }
+
   if (wizardState.step === 2) {
     if (!wizardState.renderChecked) {
       await runWizardDetection();
@@ -479,12 +516,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // permission dialog closes the popup. The timeout lets the pendingAdd and
   // picker flows (which may already start a wizard) run first.
   setTimeout(async () => {
-    if (
-      !wizardState
-      && document.getElementById('view-wizard').style.display === 'none'
-      && document.getElementById('view-form').style.display === 'none'
-    ) {
-      await maybeRestoreWizard();
-    }
+    if (!wizardState) await maybeRestoreWizard();
   }, 250);
 });
