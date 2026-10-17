@@ -139,6 +139,7 @@ const HANDLERS = {
   checkAll: () => checkAllSites(),
   importSites: (msg) => handleImportSites(msg),
   previewSite: (msg) => handlePreviewSite(msg),
+  grantDone: (msg, sender) => handleGrantDone(msg, sender),
   startPicker: (msg) => handleStartPicker(msg),
   pickerPicked: (msg, sender) => handlePickerPicked(msg, sender),
   pickerCancelled: (msg, sender) => handlePickerCancelled(msg, sender)
@@ -1453,6 +1454,65 @@ async function handlePickerPicked(msg, sender) {
         : 'Click the extension icon to finish adding this page.'
     });
   }
+  return { ok: true };
+}
+
+// --- Karta zgody (grant.html) ---
+// Po przyznaniu uprawnienia karta prosi tlo o: zamkniecie tej karty,
+// poczekanie az fokus wroci do okna przegladarki i otwarcie popupu (kreator
+// wznawia sie sam - maybeRestoreWizard widzi pendingPermission + granted).
+// Otwarcie popupu z samej karty + natychmiastowe window.close() nie dzialalo:
+// zamkniecie aktywnej karty zamykalo swiezo otwarty popup. Ten sam wzorzec
+// jest w handlePickerPicked.
+async function handleGrantDone(msg, sender) {
+  const tabId = sender && sender.tab && sender.tab.id;
+
+  (async () => {
+    if (tabId != null) {
+      try { await chrome.tabs.remove(tabId); } catch (e) { /* already gone */ }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    let opened = false;
+    try {
+      if (chrome.action && typeof chrome.action.openPopup === 'function') {
+        await chrome.action.openPopup();
+        opened = true;
+      }
+    } catch (e) {
+      console.warn('[Monitor] openPopup failed:', e);
+      opened = false;
+    }
+
+    // Fallback: popup.html jako male okno - ta sama strona rozszerzenia,
+    // kreator wznawia sie w nim tak samo.
+    if (!opened) {
+      try {
+        await chrome.windows.create({
+          url: chrome.runtime.getURL('popup.html'),
+          type: 'popup',
+          width: 580,
+          height: 700
+        });
+        opened = true;
+      } catch (e) {
+        opened = false;
+      }
+    }
+
+    if (!opened) {
+      const lang = (await chrome.storage.local.get('language')).language || detectLanguage();
+      chrome.notifications.create(`pendingadd_${Date.now()}`, {
+        type: 'basic',
+        iconUrl: 'icon48.png',
+        title: lang === 'pl' ? 'Zgoda przyznana' : 'Access granted',
+        message: lang === 'pl'
+          ? 'Kliknij ikonę rozszerzenia, aby dokończyć dodawanie strony.'
+          : 'Click the extension icon to finish adding this page.'
+      });
+    }
+  })();
+
   return { ok: true };
 }
 

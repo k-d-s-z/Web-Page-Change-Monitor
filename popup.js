@@ -1,3 +1,27 @@
+// === POPUP.JS: wklej na górze pliku (pod stałymi) ===
+// Potem w całym popup.js zamień KAŻDE wywołanie
+//     chrome.permissions.request(
+// na
+//     requestWithResume(
+// (dotyczy też kreatora / startWizard, jeśli prosi o uprawnienie).
+
+const RESUME_FLAG = 'resumeAfterPermission';
+
+// Zapisuje znacznik PRZED oknem zgody. Okno zgody zamyka popup, więc kod po
+// await może się już nie wykonać - dlatego znacznik czyta i usuwa tło
+// (background.js, chrome.permissions.onAdded).
+async function requestWithResume(details) {
+  await chrome.storage.local.set({ [RESUME_FLAG]: Date.now() });
+  try {
+    const granted = await chrome.permissions.request(details);
+    // Popup przeżył (okno zgody go nie zamknęło) - znacznik niepotrzebny.
+    await chrome.storage.local.remove(RESUME_FLAG);
+    return granted;
+  } catch (err) {
+    await chrome.storage.local.remove(RESUME_FLAG);
+    throw err;
+  }
+}
 const DRAG_THRESHOLD_PX = 3;
 const AUTOSCROLL_ZONE_PX = 40;
 const AUTOSCROLL_SPEED_PX = 12;

@@ -2,7 +2,8 @@
 // The popup always closes when Chrome's permission dialog appears (a hard
 // Chrome limitation), which used to kill the add-page wizard mid-flow. A tab
 // survives the dialog, so the flow continues: after the user grants access,
-// this tab reopens the popup and the wizard auto-continues at step 2.
+// the background closes this tab and reopens the popup, and the wizard
+// auto-continues at step 2.
 
 document.addEventListener('DOMContentLoaded', async () => {
   const t = TRANSLATIONS[detectGrantLang()];
@@ -63,31 +64,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } catch (e) { /* draft is best-effort */ }
 
-      // Bring the wizard back WITHOUT waiting for the user to hunt for the
-      // extension icon. Preferred: the real popup (Chrome 127+). Fallback
-      // (always works): popup.html opened as a small app window - it is the
-      // same extension page, so the wizard restores there and auto-continues
-      // at step 2 (maybeRestoreWizard sees pendingPermission + granted).
-      let opened = false;
+      // Hand over to the background: it closes THIS tab, waits for focus to
+      // return to the browser window and only then opens the popup. Doing
+      // openPopup() + window.close() here does not work - closing the active
+      // tab dismisses the popup that was just opened.
+      // If the message fails, the hint above stays visible as the fallback
+      // (the user clicks the extension icon; the wizard resumes from storage).
       try {
-        if (chrome.action && typeof chrome.action.openPopup === 'function') {
-          await chrome.action.openPopup();
-          opened = true;
-        }
-      } catch (e) { opened = false; }
-      if (!opened) {
-        try {
-          await chrome.windows.create({
-            url: chrome.runtime.getURL('popup.html'),
-            type: 'popup',
-            width: 420,
-            height: 660
-          });
-          opened = true;
-        } catch (e) { opened = false; }
-      }
-      if (opened) window.close();
-      // Not opened either way: the hint above stays visible as the fallback.
+        await chrome.runtime.sendMessage({ action: 'grantDone' });
+      } catch (e) { /* hint stays visible */ }
     } else {
       status.textContent = t.grantFail;
       status.className = 'status err';
