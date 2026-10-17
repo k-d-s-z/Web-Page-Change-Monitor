@@ -68,6 +68,7 @@ function errorLabel(raw, t) {
   if (/produced no text/i.test(msg)) return t.errNoText;
   if (/Tab closed/i.test(msg)) return t.errTabClosed;
   if (/Failed to fetch|NetworkError|Load failed|Page failed to load|could not load/i.test(msg)) return t.errNetwork;
+  if (/Site unreachable/i.test(msg)) return t.errUnreachable;
   return msg.length > 40 ? msg.slice(0, 40) + '\u2026' : (msg || t.checkError);
 }
 

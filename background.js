@@ -987,7 +987,6 @@ async function handleSaveSite(msg) {
       freqIndex: input.freqIndex,
       freqMinutes: input.freqMinutes,
       ignoreDates: input.ignoreDates,
-      requireCookies: input.requireCookies,
       enableNotifications: input.enableNotifications,
       // P1 (audit): rendered mode opens the page in a real tab, which always
       // uses the browser session/cookies - "omit cookies" cannot be honored.

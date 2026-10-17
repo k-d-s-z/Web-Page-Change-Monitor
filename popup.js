@@ -29,6 +29,7 @@ const DEFAULT_FREQ_INDEX = '2';
 const MAX_SITES = 50;
 const PENDING_ADD_MAX_AGE_MS = 10 * 60 * 1000;
 const SUPPORTED_BACKUP_VERSION = 1;
+const SUMMARY_HIDE_MS = 4000;
 
 let currentLang = 'en';
 const checkingIds = new Set();
