@@ -1,0 +1,439 @@
+// Add-page wizard: a step-by-step flow that replaces the single "add" form.
+// It reuses popup.js globals (TRANSLATIONS, currentLang, callBackground,
+// DEFAULT_FREQ_INDEX, saveErrorMessage, triggerCheck, showList).
+// The form view is still used for EDITING a page; only adding goes through here.
+//
+// Crash-safety: the popup CLOSES when Chrome's permission dialog takes focus,
+// killing any pending async flow. The wizard therefore keeps its whole state
+// in chrome.storage.local ("wizardDraft") and popup.js restores it on the
+// next open (maybeRestoreWizard), so granting permission never loses progress.
+//
+// Custom interval: NOT offered in the wizard (it kept fighting the select
+// re-render); it stays available under the pencil (edit) form.
+
+let wizardState = null;
+
+const WIZARD_PLACEHOLDERS = {
+  en: { name: 'e.g. News / Store', url: 'https://...', selector: '#content, .results, main' },
+  pl: { name: 'np. Wiadomo\u015bci / Sklep', url: 'https://...', selector: '#content, .results, main' }
+};
+
+function startWizard(prefill = null) {
+  wizardState = {
+    step: 1,
+    url: (prefill && prefill.url) || '',
+    name: (prefill && prefill.name) || '',
+    rendered: false,
+    renderChecked: false,
+    finalCheckDone: false,
+    requireCookies: false,
+    selector: '',
+    freqIndex: DEFAULT_FREQ_INDEX,
+    ignoreDates: true,
+    enableNotifications: true
+  };
+  document.getElementById('view-list').style.display = 'none';
+  document.getElementById('view-form').style.display = 'none';
+  document.getElementById('view-wizard').style.display = 'block';
+  clearWizardMessage();
+  saveWizardDraft();
+  renderWizard();
+}
+
+function endWizard() {
+  wizardState = null;
+  document.getElementById('view-wizard').style.display = 'none';
+  clearWizardDraft();
+}
+
+// Whole wizard state survives a popup restart (e.g. the permission dialog
+// closing the popup mid-flight).
+function saveWizardDraft() {
+  const s = wizardState;
+  if (!s) return;
+  try {
+    chrome.storage.local.set({
+      wizardDraft: {
+        step: s.step,
+        url: s.url,
+        name: s.name,
+        rendered: s.rendered,
+        renderChecked: s.renderChecked,
+        finalCheckDone: s.finalCheckDone,
+        requireCookies: s.requireCookies,
+        selector: s.selector,
+        freqIndex: s.freqIndex,
+        ignoreDates: s.ignoreDates,
+        enableNotifications: s.enableNotifications
+      }
+    });
+  } catch (err) { /* storage unavailable - the wizard still works in-memory */ }
+}
+
+function clearWizardDraft() {
+  try { chrome.storage.local.remove('wizardDraft'); } catch (err) { /* noop */ }
+}
+
+function showWizardMessage(text, kind = 'error') {
+  const box = document.getElementById('wizard-message');
+  box.textContent = text;
+  box.className = `form-message show${kind === 'warn' ? ' warn' : ''}`;
+}
+
+function clearWizardMessage() {
+  const box = document.getElementById('wizard-message');
+  box.textContent = '';
+  box.className = 'form-message';
+}
+
+function renderWizard() {
+  const s = wizardState;
+  if (!s) return;
+  const t = TRANSLATIONS[currentLang];
+  const ph = WIZARD_PLACEHOLDERS[currentLang] || WIZARD_PLACEHOLDERS.en;
+
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById(`wizard-step-${i}`).style.display = (i === s.step) ? 'block' : 'none';
+  }
+
+  document.getElementById('wizard-back').style.visibility = s.step === 1 ? 'hidden' : 'visible';
+  document.getElementById('wizard-next').textContent = s.step === 5 ? t.btnSave : t.wizNext;
+  clearWizardMessage();
+
+  if (s.step === 1) {
+    const nameEl = document.getElementById('wizard-name');
+    const urlEl = document.getElementById('wizard-url');
+    if (document.activeElement !== nameEl) nameEl.value = s.name;
+    if (document.activeElement !== urlEl) urlEl.value = s.url;
+    nameEl.placeholder = ph.name;
+    urlEl.placeholder = ph.url;
+  }
+
+  if (s.step === 2) {
+    const info = document.getElementById('wizard-render-info');
+    if (!s.renderChecked) {
+      info.textContent = t.wizRenderChecking;
+      info.className = 'wizard-note';
+    } else if (s.rendered) {
+      info.textContent = t.wizRenderDetected;
+      info.className = 'wizard-note ok';
+    } else {
+      info.textContent = t.wizRenderNotDetected;
+      info.className = 'wizard-note';
+    }
+  }
+
+  if (s.step === 3) {
+    document.getElementById('wizard-cookies').checked = s.requireCookies;
+  }
+
+  if (s.step === 4) {
+    const sel = document.getElementById('wizard-selector');
+    if (document.activeElement !== sel) sel.value = s.selector;
+    sel.placeholder = ph.selector;
+  }
+
+  if (s.step === 5) {
+    const freq = document.getElementById('wizard-freq');
+    const finalNote = document.getElementById('wizard-render-final');
+    freq.value = String(s.freqIndex);
+    // Rendered mode: no 1-minute checks.
+    const oneMin = freq.querySelector('option[value="0"]');
+    if (oneMin) oneMin.disabled = s.rendered;
+    if (s.rendered && freq.value === '0') {
+      freq.value = '1';
+      s.freqIndex = 1;
+    }
+    // Late rendered detection (cookies only known since step 3): keep the
+    // user informed right where they finish the setup.
+    finalNote.style.display = s.rendered ? 'block' : 'none';
+    finalNote.textContent = s.rendered ? t.wizRenderDetected : '';
+    finalNote.className = s.rendered ? 'wizard-note ok' : 'wizard-note';
+    document.getElementById('wizard-notifications').checked = s.enableNotifications;
+    document.getElementById('wizard-ignore-dates').checked = s.ignoreDates;
+  }
+}
+
+function wizardGo(step) {
+  if (!wizardState) return;
+  wizardState.step = step;
+  saveWizardDraft();
+  renderWizard();
+}
+
+function wizardBack() {
+  if (!wizardState || wizardState.step <= 1) return;
+  wizardGo(wizardState.step - 1);
+}
+
+// Step 2 detection, factored out so the restored wizard (popup closed during
+// the permission dialog) can continue exactly where it stopped.
+async function runWizardDetection() {
+  const s = wizardState;
+  if (!s) return;
+  const res = await callBackground({
+    action: 'previewSite',
+    site: {
+      url: s.url,
+      freqIndex: 2,
+      ignoreDates: false,
+      requireCookies: false,
+      enableNotifications: true,
+      renderMode: 'fast',
+      selector: ''
+    }
+  });
+  if (!wizardState) return; // wizard finished/cancelled while we were checking
+  s.renderChecked = true;
+  if (res && res.ok && res.suggestRendered) s.rendered = true;
+  if (res && res.ok && s.rendered) s.requireCookies = true;
+  saveWizardDraft();
+  if (wizardState.step === 2) {
+    // 4.1: rendered page detected - stay and inform; 4.2: plain HTML -
+    // skip the note and move on to the login question automatically.
+    if (s.rendered) renderWizard();
+    else wizardGo(3);
+  }
+}
+
+// Final safety net before saving: the step-2 probe ran WITHOUT cookies (the
+// cookie question comes later), so a logged-in page could look like plain
+// HTML then. Re-check with the settings the user actually chose; if the
+// page turns out to be script-drawn (or the selector is missing from the
+// source), switch to rendered mode and say so on step 5 - instead of the
+// user only finding out later from the yellow card badge.
+async function maybeFinalRenderCheck() {
+  const s = wizardState;
+  if (!s || s.rendered || s.finalCheckDone) return;
+  s.finalCheckDone = true;
+  saveWizardDraft();
+
+  const res = await callBackground({
+    action: 'previewSite',
+    site: {
+      url: s.url,
+      freqIndex: 2,
+      ignoreDates: false,
+      requireCookies: s.requireCookies,
+      enableNotifications: true,
+      renderMode: 'fast',
+      selector: s.selector
+    }
+  });
+  if (!wizardState) return;
+
+  const suggestByHeuristic = !!(res && res.ok && res.suggestRendered);
+  const selectorMissingInSource = !!(!res || (!res.ok && /^Selector not found/i.test(String(res.error || ''))));
+  if (suggestByHeuristic || selectorMissingInSource) {
+    s.rendered = true;
+    s.requireCookies = true; // rendered mode always uses the browser session
+    saveWizardDraft();
+    if (wizardState.step === 5) renderWizard();
+  }
+}
+
+async function wizardNext() {
+  const s = wizardState;
+  if (!s) return;
+  const t = TRANSLATIONS[currentLang];
+
+  if (s.step === 1) {
+    const name = document.getElementById('wizard-name').value.trim();
+    let url = document.getElementById('wizard-url').value.trim();
+    if (!name || !url) { showWizardMessage(t.alertFillFields); return; }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    let urlObj;
+    try { urlObj = new URL(url); } catch (err) { showWizardMessage(t.alertInvalidUrl); return; }
+
+    // Persist FIRST (step 2, detection pending): if the permission dialog
+    // closes this popup, the wizard resumes on the next open instead of
+    // making the user start over.
+    s.name = name;
+    s.url = url;
+    s.renderChecked = false;
+    wizardGo(2);
+
+    // Host permission must be requested inside the click gesture.
+    const pattern = `${urlObj.protocol}//${urlObj.host}/*`;
+    let granted = false;
+    try {
+      granted = await chrome.permissions.contains({ origins: [pattern] })
+        || await chrome.permissions.request({ origins: [pattern] });
+    } catch (err) { granted = false; }
+    if (!granted) {
+      showWizardMessage(t.alertPermissionReq);
+      wizardGo(1);
+      return;
+    }
+
+    await runWizardDetection();
+    return;
+  }
+
+  if (s.step === 2) { wizardGo(3); return; }
+
+  if (s.step === 3) {
+    s.requireCookies = document.getElementById('wizard-cookies').checked || s.rendered;
+    wizardGo(4);
+    return;
+  }
+
+  if (s.step === 4) {
+    s.selector = document.getElementById('wizard-selector').value.trim();
+    wizardGo(5);
+    // Cookies/selector are known only now - verify the render mode once more.
+    maybeFinalRenderCheck();
+    return;
+  }
+
+  if (s.step === 5) {
+    const freqIndex = parseInt(document.getElementById('wizard-freq').value, 10);
+    s.freqIndex = (s.rendered && freqIndex === 0) ? 1 : freqIndex;
+    s.ignoreDates = document.getElementById('wizard-ignore-dates').checked;
+    s.enableNotifications = document.getElementById('wizard-notifications').checked;
+    saveWizardDraft();
+
+    const res = await callBackground({
+      action: 'saveSite',
+      site: {
+        id: '',
+        name: s.name,
+        url: s.url,
+        freqIndex: s.freqIndex,
+        freqMinutes: null,
+        ignoreDates: s.ignoreDates,
+        requireCookies: s.requireCookies,
+        enableNotifications: s.enableNotifications,
+        renderMode: s.rendered ? 'rendered' : 'fast',
+        selector: s.selector
+      }
+    });
+
+    if (!res || !res.ok) {
+      showWizardMessage(saveErrorMessage(res));
+      return;
+    }
+
+    const siteId = res.siteId;
+    endWizard();
+    await showList();
+    if (res.needsBaseline && siteId) triggerCheck(siteId);
+  }
+}
+
+async function wizardPick() {
+  const s = wizardState;
+  if (!s) return;
+  const t = TRANSLATIONS[currentLang];
+
+  const pattern = `${new URL(s.url).origin}/*`;
+  let granted = false;
+  try {
+    granted = await chrome.permissions.contains({ origins: [pattern] })
+      || await chrome.permissions.request({ origins: [pattern] });
+  } catch (err) { granted = false; }
+  if (!granted) { showWizardMessage(t.pickerPermission); return; }
+
+  // Keep the whole wizard state under pickerDraft: the popup will close when
+  // the tab takes focus, and maybeRestorePicker() brings the user back here.
+  const draft = {
+    wizard: true,
+    step: s.step,
+    url: s.url,
+    name: s.name,
+    rendered: s.rendered,
+    renderChecked: s.renderChecked,
+    finalCheckDone: s.finalCheckDone,
+    requireCookies: s.requireCookies,
+    selector: document.getElementById('wizard-selector').value.trim(),
+    freqIndex: s.freqIndex,
+    ignoreDates: s.ignoreDates,
+    enableNotifications: s.enableNotifications
+  };
+  await chrome.storage.local.set({
+    pendingPicker: { url: s.url, siteId: null },
+    pickerDraft: draft
+  });
+  const res = await callBackground({
+    action: 'startPicker',
+    url: s.url,
+    siteId: null,
+    requireCookies: s.requireCookies,
+    rendered: s.rendered
+  });
+  if (!res || !res.ok) {
+    await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
+    showWizardMessage(res && res.error === 'permission' ? t.pickerPermission : t.errSave);
+  }
+}
+
+// Called by popup.js (maybeRestorePicker) when the user picked an element.
+function restoreWizardWithSelector(picked, draft) {
+  startWizard(null);
+  const s = wizardState;
+  s.url = picked.url || (draft && draft.url) || '';
+  s.name = (draft && draft.name) || '';
+  s.rendered = !!(draft && draft.rendered);
+  s.renderChecked = !!(draft && draft.renderChecked);
+  s.finalCheckDone = !!(draft && draft.finalCheckDone);
+  s.requireCookies = !!(draft && draft.requireCookies);
+  s.selector = (picked && picked.selector) || '';
+  s.freqIndex = (draft && draft.freqIndex) || DEFAULT_FREQ_INDEX;
+  s.ignoreDates = draft ? draft.ignoreDates !== false : true;
+  s.enableNotifications = draft ? draft.enableNotifications !== false : true;
+  wizardGo(4);
+}
+
+// Popup was closed while the wizard was running (e.g. the permission dialog):
+// bring the wizard back at the exact step, and finish a pending detection.
+async function maybeRestoreWizard() {
+  if (wizardState) return false; // already running (e.g. pendingAdd)
+  const data = await chrome.storage.local.get('wizardDraft');
+  const d = data.wizardDraft;
+  if (!d || !d.url) return false;
+
+  wizardState = {
+    step: Math.min(Math.max(parseInt(d.step, 10) || 1, 1), 5),
+    url: d.url || '',
+    name: d.name || '',
+    rendered: !!d.rendered,
+    renderChecked: !!d.renderChecked,
+    finalCheckDone: !!d.finalCheckDone,
+    requireCookies: !!d.requireCookies,
+    selector: d.selector || '',
+    freqIndex: d.freqIndex || DEFAULT_FREQ_INDEX,
+    ignoreDates: d.ignoreDates !== false,
+    enableNotifications: d.enableNotifications !== false
+  };
+  document.getElementById('view-list').style.display = 'none';
+  document.getElementById('view-form').style.display = 'none';
+  document.getElementById('view-wizard').style.display = 'block';
+  renderWizard();
+
+  if (wizardState.step === 2) {
+    if (!wizardState.renderChecked) {
+      await runWizardDetection();
+    } else if (!wizardState.rendered) {
+      wizardGo(3);
+    }
+  } else if (wizardState.step === 5) {
+    maybeFinalRenderCheck();
+  }
+  return true;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('wizard-next').addEventListener('click', wizardNext);
+  document.getElementById('wizard-back').addEventListener('click', wizardBack);
+  document.getElementById('wizard-cancel').addEventListener('click', async () => {
+    endWizard();
+    await showList();
+  });
+  document.getElementById('wizard-pick').addEventListener('click', wizardPick);
+  document.getElementById('wizard-freq').addEventListener('change', () => {
+    if (!wizardState) return;
+    const freqIndex = parseInt(document.getElementById('wizard-freq').value, 10);
+    wizardState.freqIndex = (wizardState.rendered && freqIndex === 0) ? 1 : freqIndex;
+    saveWizardDraft();
+  });
+});

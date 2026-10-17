@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Web Page Change Monitor",
-  "version": "1.8.0",
+  "version": "2.0.0",
   "minimum_chrome_version": "116",
   "description": "Monitors selected web pages and notifies you of content changes.",
   "permissions": [

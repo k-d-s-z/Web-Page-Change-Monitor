@@ -167,11 +167,28 @@
     .icon-btn.busy svg {
       animation: spin 0.9s linear infinite;
     }
+    /* WyrÃ³Å¼nik ikon gÃ³rnego menu (ustawienia / odÅwieÅ¼ / oznacz / dodaj):
+       fioletowa obwÃ³dka i delikatne fioletowe tÅo odcinajÄ je od identycznych
+       wyglÄdowo ikon na kartach i nagÅÃ³wkach grup. */
+    .header-actions .icon-btn:not(.primary) {
+      border-color: var(--brand);
+      color: var(--brand-soft);
+      background: color-mix(in srgb, var(--brand) 16%, var(--bg-card));
+    }
+    .header-actions .icon-btn:not(.primary):hover {
+      border-color: var(--brand-soft);
+      color: var(--brand-softer);
+      background: color-mix(in srgb, var(--brand) 28%, var(--bg-card));
+    }
+    .header-actions .icon-btn:not(.primary):focus-visible {
+      outline: 2px solid var(--brand-soft);
+      outline-offset: 2px;
+    }
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    /* Panel ustawieÃÂ: wysuwanie przez grid-rows 0fr -> 1fr (pÃÂynne,
-       bez znanej puÃÂapki animowania max-height). */
+    /* Panel ustawieÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ: wysuwanie przez grid-rows 0fr -> 1fr (pÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂynne,
+       bez znanej puÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂapki animowania max-height). */
     .settings-panel {
       display: grid;
       grid-template-rows: 0fr;
@@ -209,8 +226,8 @@
       height: 26px;
       border-radius: 8px;
     }
-    /* UkÃÂad 2ÃÂ2: kolumna Ã¢ÂÂKopia ustawieÃÂ" (UtwÃÂ³rz/PrzywrÃÂ³ÃÂ) i kolumna
-       Ã¢ÂÂJÃÂzyk" (EN/PL) Ã¢ÂÂ rÃÂ³wne kolumny z krÃÂ³tkimi nagÃÂÃÂ³wkami. */
+    /* UkÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂad 2ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ2: kolumna ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂKopia ustawieÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ" (UtwÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³rz/PrzywrÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ) i kolumna
+       ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂJÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂzyk" (EN/PL) ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ rÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³wne kolumny z krÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³tkimi nagÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³wkami. */
     .settings-grid {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -382,8 +399,8 @@
       outline: 2px solid var(--brand);
       outline-offset: 1px;
     }
-    /* A2: pauza Ã¢ÂÂ karta w peÃÂni czytelna (bez opacity na caÃÂoÃÂci);
-       wyciszamy tylko nazwÃÂ i metadane oraz ramkÃÂ. DziaÃÂa teÃÂ¼ z hover. */
+    /* A2: pauza ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ karta w peÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂni czytelna (bez opacity na caÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂci);
+       wyciszamy tylko nazwÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ i metadane oraz ramkÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ. DziaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂa teÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ z hover. */
     .site-card.paused {
       border-style: dashed;
       border-color: var(--bg-soft);
@@ -1031,6 +1048,18 @@
     [data-theme="light"] .badge-suggest {
       color: var(--white);
     }
+    /* Wizard dodawania strony */
+    .wizard-step { margin-bottom: 4px; }
+    .wizard-question { font-size: 14px; font-weight: 600; margin: 2px 0 10px; color: var(--text-strong); }
+    .wizard-note { font-size: 12px; color: var(--text-2); margin: 0 0 10px; line-height: 1.45; }
+    .wizard-nav { display: flex; gap: 8px; margin-top: 12px; }
+    /* U2: dlugie etykiety (PL) zawijaja sie zamiast nakladac na ikone "i" */
+    .label-row { display: flex; align-items: flex-start; gap: 6px; }
+    .label-row label { white-space: normal; overflow: visible; }
+    .label-row .info-btn { flex: 0 0 auto; }
+    .checkbox-row { display: flex; align-items: flex-start; gap: 6px; }
+    .checkbox-row .checkbox-label span { white-space: normal; }
+    .checkbox-row .info-btn { flex: 0 0 auto; }
   </style>
 </head>
 <body>
@@ -1122,6 +1151,40 @@
       <input type="text" id="site-url" placeholder="https://...">
     </div>
 
+    <div class="checkbox-row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="site-rendered">
+        <span data-i18n="chkRendered">Rendered page mode (JS-rendered sites)</span>
+      </label>
+      <button type="button" class="info-btn" data-popover="hintRendered" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      </button>
+    </div>
+
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="site-cookies">
+            <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
+          </label>
+          <button type="button" class="info-btn" data-popover="hintCookies" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          </button>
+        </div>
+    <div id="advanced-section" class="adv-section open">
+      <div class="adv-section-inner">
+        <div class="form-group">
+          <div class="label-row">
+            <label data-i18n="lblSelector">Watch only part of the page (CSS selector)</label>
+            <button type="button" class="info-btn" data-popover="hintSelector" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </button>
+          </div>
+          <input type="text" id="site-selector" placeholder="#content, .results, main">
+          <button type="button" id="btn-pick" class="btn-secondary btn-pick" data-i18n="btnPick">Pick element on the page...</button>
+        </div>
+
+      </div>
+    </div>
     <div class="form-group">
       <div class="label-row">
         <label data-i18n="lblFreq">Check Frequency</label>
@@ -1150,29 +1213,6 @@
       </button>
     </div>
 
-    <div class="checkbox-row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="site-rendered">
-        <span data-i18n="chkRendered">Rendered page mode (JS-rendered sites)</span>
-      </label>
-      <button type="button" class="info-btn" data-popover="hintRendered" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-      </button>
-    </div>
-
-    <div id="advanced-section" class="adv-section open">
-      <div class="adv-section-inner">
-        <div class="form-group">
-          <div class="label-row">
-            <label data-i18n="lblSelector">Watch only part of the page (CSS selector)</label>
-            <button type="button" class="info-btn" data-popover="hintSelector" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            </button>
-          </div>
-          <input type="text" id="site-selector" placeholder="#content, .results, main">
-          <button type="button" id="btn-pick" class="btn-secondary btn-pick" data-i18n="btnPick">Pick element on the page...</button>
-        </div>
-
         <div class="checkbox-row">
           <label class="checkbox-label">
             <input type="checkbox" id="site-ignore-dates" checked>
@@ -1183,17 +1223,6 @@
           </button>
         </div>
 
-        <div class="checkbox-row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="site-cookies">
-            <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
-          </label>
-          <button type="button" class="info-btn" data-popover="hintCookies" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
 
     <button type="button" id="btn-test" class="btn-secondary btn-pick" data-i18n="btnTest">Test check</button>
     <div id="test-result" class="test-result" role="status" aria-live="polite"></div>
@@ -1204,6 +1233,85 @@
     <button id="btn-cancel" class="btn-main btn-cancel" data-i18n="btnCancel">Cancel</button>
   </div>
 
+
+  <div id="view-wizard" style="display: none;">
+    <h2 data-i18n="wizTitle">Add page</h2>
+
+    <div id="wizard-step-1" class="wizard-step">
+      <div class="form-group">
+        <div class="label-row">
+          <label data-i18n="lblSiteName">Name</label>
+        </div>
+        <input type="text" id="wizard-name" maxlength="100" placeholder="e.g. News / Store">
+      </div>
+      <div class="form-group">
+        <div class="label-row">
+          <label data-i18n="lblSiteUrl">URL Address</label>
+        </div>
+        <input type="text" id="wizard-url" placeholder="https://...">
+      </div>
+    </div>
+
+    <div id="wizard-step-2" class="wizard-step">
+      <p id="wizard-render-info" class="wizard-note"></p>
+    </div>
+
+    <div id="wizard-step-3" class="wizard-step">
+      <p class="wizard-question" data-i18n="wizLoginQuestion">Does this page require logging in?</p>
+      <div class="checkbox-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="wizard-cookies">
+          <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
+        </label>
+      </div>
+      <p class="wizard-note" data-i18n="wizLoginHint">If yes, tick the box below.</p>
+    </div>
+
+    <div id="wizard-step-4" class="wizard-step">
+      <p class="wizard-question" data-i18n="wizSelectorQuestion">Monitor only a chosen part of the page?</p>
+      <div class="form-group">
+        <input type="text" id="wizard-selector" placeholder="#content, .results, main">
+        <button type="button" id="wizard-pick" class="btn-secondary btn-pick" data-i18n="btnPick">Pick element on the page...</button>
+      </div>
+      <p class="wizard-note" data-i18n="wizSelectorHint">Pick an element or type a CSS selector. Leave empty for the whole page.</p>
+    </div>
+
+    <div id="wizard-step-5" class="wizard-step">
+      <p id="wizard-render-final" class="wizard-note" style="display: none;"></p>
+      <div class="form-group">
+        <div class="label-row">
+          <label data-i18n="lblFreq">Check Frequency</label>
+        </div>
+        <select id="wizard-freq">
+          <option value="0" data-i18n="opt1m">Every 1 minute</option>
+          <option value="1" data-i18n="opt5m">Every 5 minutes</option>
+          <option value="2" data-i18n="opt10m">Every 10 minutes</option>
+          <option value="3" data-i18n="opt1h">Every 1 hour</option>
+          <option value="4" data-i18n="opt24h">Once a day</option>
+        </select>
+      </div>
+      <div class="checkbox-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="wizard-notifications" checked>
+          <span data-i18n="chkNotifications">Enable desktop notifications</span>
+        </label>
+      </div>
+      <div class="checkbox-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="wizard-ignore-dates" checked>
+          <span data-i18n="chkIgnoreDates">Ignore date and time changes</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="wizard-message" class="form-message" role="alert"></div>
+
+    <div class="wizard-nav">
+      <button type="button" id="wizard-back" class="btn-main btn-cancel" data-i18n="wizBack">Back</button>
+      <button type="button" id="wizard-next" class="btn-main" data-i18n="wizNext">Next</button>
+    </div>
+    <button type="button" id="wizard-cancel" class="btn-secondary" data-i18n="btnCancel">Cancel</button>
+  </div>
   <!-- Shared info popover: filled by popup.js from TRANSLATIONS[data-popover]. -->
   <div id="popover" class="popover" role="tooltip" aria-hidden="true"></div>
 
@@ -1213,6 +1321,7 @@
   <script src="groups.js"></script>
   <script src="drag.js"></script>
   <script src="popup.js"></script>
+  <script src="wizard.js"></script>
 
   <div id="sr-live" class="sr-only" role="status" aria-live="polite"></div>
 </body>
