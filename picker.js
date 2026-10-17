@@ -106,9 +106,45 @@
     box.style.height = rect.height + 'px';
   }
 
+  // Brief warning in the hint bar (fragile-pick refusal). Keeps the picker
+  // ACTIVE - the user can immediately aim somewhere else.
+  function flashHint(text) {
+    if (!hintBar.parentNode) return;
+    const prev = hintBar.textContent;
+    hintBar.textContent = text;
+    hintBar.style.background = 'rgba(180, 60, 30, 0.92)';
+    setTimeout(() => {
+      hintBar.textContent = prev;
+      hintBar.style.background = '';
+    }, 2500);
+  }
+
+  // C: only elements WITH an id or a class are pickable. Elements without
+  // any (bare <div>, <td>...) would get a fragile nth-child selector that
+  // breaks the moment the page structure changes - they get NO highlight
+  // and a click on them does nothing (strict mode, no ancestor bubbling).
+  // document.body stays pickable for whole-page monitoring ("body").
+  function isPickable(el) {
+    if (!el || el === document.documentElement) return false;
+    if (el === document.body) return true; // whole page (selector "body")
+    return Boolean(el.id) || el.classList.length > 0;
+  }
   function onMouseMove(e) {
     if (e.target === overlay || e.target === label || e.target === hintBar) return;
-    target = e.target;
+    // STRICT mode: only the element DIRECTLY under the cursor is a pick
+    // candidate - NO bubbling to ancestors. A bare element (no id/class)
+    // shows no highlight at all, so the user clearly sees what is and is
+    // not pickable.
+    const el = isPickable(e.target) ? e.target : null;
+    if (!el) {
+      target = null;
+      overlay.style.display = 'none';
+      label.style.display = 'none';
+      return;
+    }
+    target = el;
+    overlay.style.display = 'block';
+    label.style.display = 'block';
     const rect = target.getBoundingClientRect();
     place(overlay, rect);
     place(label, rect);
@@ -158,8 +194,27 @@
   // pickerPicked message only asks the background to close the tab.
   async function pick(el) {
     if (picked) return;
+    if (!isPickable(el)) {
+      // Strict mode: bare elements are never picked - do nothing, let the
+      // user aim at an element with an id/class instead.
+      return;
+    }
+    // Compute the selector FIRST and refuse FRAGILE picks: an element may
+    // have classes, but if none of them is unique on the page, selectorFor()
+    // falls back to a positional body > div:nth-child(2) > ... chain that
+    // breaks the moment the page structure changes. Such a pick is worse
+    // than no pick - warn instead of committing it.
+    const candidate = selectorFor(el || target || downTarget);
+    if (!/[.#]/.test(candidate)) {
+      flashHint(
+        el.classList && el.classList.length
+          ? 'Klasa tego elementu nie jest unikalna \u2014 wybierz inny fragment (np. nadrz\u0119dny blok z klas\u0105).'
+          : 'Ten element nie ma unikalnego id/klasy \u2014 wybierz inny fragment.'
+      );
+      return;
+    }
     picked = true;
-    const selector = selectorFor(el || target || downTarget);
+    const selector = candidate;
     cleanup();
 
     // needsRendered: the element is NOT in the server HTML, so the fast mode
@@ -187,14 +242,15 @@
     if (e.target === overlay || e.target === label || e.target === hintBar) return;
     e.preventDefault();
     e.stopPropagation();
-    downTarget = e.target || target;
+    // Strict: record the target ONLY if it is pickable itself.
+    downTarget = isPickable(e.target) ? e.target : null;
   }
 
   function onMouseUp(e) {
     if (e.target === overlay || e.target === label || e.target === hintBar) return;
     e.preventDefault();
     e.stopPropagation();
-    pick(downTarget || target);
+    pick(downTarget || (isPickable(target) ? target : null));
   }
 
   // Fallback for environments where mouseup never fires (e.g. unusual
@@ -203,7 +259,7 @@
     if (picked) return;
     e.preventDefault();
     e.stopPropagation();
-    pick(target || downTarget);
+    pick(isPickable(e.target) ? e.target : (isPickable(target) ? target : null));
   }
 
   function onKey(e) {

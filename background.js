@@ -1374,8 +1374,8 @@ async function handleMarkSitesRead(msg) {
 
 function pickerHintText(lang) {
   return lang === 'pl'
-    ? 'Kliknij fragment strony, kt\u00f3ry chcesz monitorowa\u0107. Esc anuluje.'
-    : 'Click the part of the page you want to watch. Esc cancels.';
+    ? 'Kliknij fragment strony, kt\u00f3ry chcesz monitorowa\u0107 (tylko elementy z klas\u0105 lub id). Esc anuluje.'
+    : 'Click the part of the page you want to watch (only elements with a class or id). Esc cancels.';
 }
 
 // "Test check" in the form: one throw-away check (nothing is stored) that shows
