@@ -49,11 +49,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await maybeRestorePicker();
   maybeShowChangedHint();
 
-  document.getElementById('btn-add-view').addEventListener('click', () => showForm());
+  document.getElementById('btn-add-view').addEventListener('click', openAddForm);
+  document.getElementById('btn-test').addEventListener('click', testSite);
   document.getElementById('btn-cancel').addEventListener('click', () => showList());
   document.getElementById('btn-save').addEventListener('click', saveSite);
   document.getElementById('btn-pick').addEventListener('click', startPicker);
   document.getElementById('site-rendered').addEventListener('change', syncRenderedUI);
+  document.getElementById('site-freq').addEventListener('change', toggleCustomFreq);
   document.getElementById('btn-refresh-all').addEventListener('click', refreshAll);
   document.getElementById('btn-mark-read').addEventListener('click', markAllRead);
   document.getElementById('btn-settings').addEventListener('click', () => toggleSettingsPanel());
@@ -281,8 +283,9 @@ function showFilterSummary() {
 }
 
 async function createBackup() {
-  const data = await chrome.storage.local.get('sites');
+  const data = await chrome.storage.local.get(['sites', 'groups']);
   const sites = data.sites || [];
+  const groupNames = new Map((data.groups || []).map((g) => [g.id, g.name]));
 
   const payload = {
     version: 1,
@@ -291,7 +294,9 @@ async function createBackup() {
       name: s.name,
       url: s.url,
       openUrl: s.openUrl || s.url,
+      group: s.groupId ? (groupNames.get(s.groupId) || '') : '',
       freqIndex: s.freqIndex,
+      freqMinutes: s.freqMinutes || null,
       ignoreDates: Boolean(s.ignoreDates),
       requireCookies: Boolean(s.requireCookies),
       enableNotifications: Boolean(s.enableNotifications),
@@ -399,11 +404,13 @@ async function maybeOpenPendingAdd() {
 
   if (Date.now() - (pending.ts || 0) > PENDING_ADD_MAX_AGE_MS) return;
 
-  let suggestedName = '';
-  try {
-    suggestedName = new URL(pending.url).hostname.replace(/^www\./, '');
-  } catch (e) {
-    suggestedName = '';
+  let suggestedName = cleanTitle(pending.title);
+  if (!suggestedName) {
+    try {
+      suggestedName = new URL(pending.url).hostname.replace(/^www\./, '');
+    } catch (e) {
+      suggestedName = '';
+    }
   }
 
   showForm(null, { url: pending.url, name: suggestedName });
@@ -428,6 +435,16 @@ async function maybeShowChangedHint() {
 
 // Rendered mode opens a real tab and always uses the browser session, so the
 // form reflects that: cookies ticked and locked, 1-minute interval unavailable.
+// Shows the minutes field only for the "Custom..." interval.
+function toggleCustomFreq() {
+  const custom = document.getElementById('site-freq').value === 'custom';
+  document.getElementById('freq-custom').style.display = custom ? 'flex' : 'none';
+  if (custom) {
+    const input = document.getElementById('site-freq-custom');
+    if (document.activeElement === document.getElementById('site-freq')) input.focus();
+  }
+}
+
 function syncRenderedUI() {
   const rendered = document.getElementById('site-rendered').checked;
   const cookies = document.getElementById('site-cookies');
@@ -437,6 +454,133 @@ function syncRenderedUI() {
   const oneMin = freq.querySelector('option[value="0"]');
   if (oneMin) oneMin.disabled = rendered;
   if (rendered && freq.value === '0') freq.value = '1';
+  const customInput = document.getElementById('site-freq-custom');
+  customInput.min = rendered ? '5' : '1';
+  if (rendered && freq.value === 'custom' && customInput.value !== '' && Number(customInput.value) < 5) {
+    customInput.value = '5';
+  }
+}
+
+function cleanTitle(title) {
+  return String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+// "Add" opens the form pre-filled with the active tab (URL + title) - unless
+// that page is not http(s) or is already on the list.
+async function openAddForm() {
+  let prefill = null;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && /^https?:\/\//i.test(tab.url || '')) {
+      const data = await chrome.storage.local.get('sites');
+      const identity = new URL(tab.url).href;
+      const known = (data.sites || []).some((s) => {
+        try { return new URL(s.url).href === identity; } catch (e) { return false; }
+      });
+      if (!known) {
+        let name = cleanTitle(tab.title);
+        if (!name) name = new URL(tab.url).hostname.replace(/^www\./, '');
+        prefill = { url: tab.url, name };
+      }
+    }
+  } catch (e) {
+    prefill = null;
+  }
+  showForm(null, prefill);
+}
+
+function hideTestResult() {
+  const box = document.getElementById('test-result');
+  box.className = 'test-result';
+  box.replaceChildren();
+}
+
+function showTestResult(res, t) {
+  const box = document.getElementById('test-result');
+  const head = document.createElement('div');
+  head.className = 'tr-head';
+  head.textContent = `${t.testHead}: ${res.chars} ${t.testChars}, ${res.lines} ${t.testLines}`;
+  box.replaceChildren(head, document.createTextNode(res.chars > 0 ? res.preview : t.testEmpty));
+  box.className = `test-result show${res.chars > 0 ? '' : ' warn'}`;
+}
+
+// "Test check": one throw-away check with the CURRENT form values, so a wrong
+// mode or selector shows up before saving.
+async function testSite() {
+  const t = TRANSLATIONS[currentLang];
+  clearFormMessage();
+  hideTestResult();
+
+  let url = document.getElementById('site-url').value.trim();
+  if (!url) {
+    showFormMessage(t.alertFillFields);
+    return;
+  }
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  let urlObj;
+  try { urlObj = new URL(url); } catch (err) {
+    showFormMessage(t.alertInvalidUrl);
+    return;
+  }
+
+  // Host permission first (inside the click gesture), same as saving.
+  const pattern = `${urlObj.protocol}//${urlObj.host}/*`;
+  let granted = false;
+  try {
+    granted = await chrome.permissions.contains({ origins: [pattern] })
+      || await chrome.permissions.request({ origins: [pattern] });
+  } catch (err) {
+    granted = false;
+  }
+  if (!granted) {
+    showFormMessage(t.alertPermissionReq);
+    return;
+  }
+
+  const rendered = document.getElementById('site-rendered').checked;
+  const btn = document.getElementById('btn-test');
+  btn.disabled = true;
+  btn.textContent = t.btnTestBusy;
+
+  let res;
+  try {
+    res = await callBackground({
+      action: 'previewSite',
+      site: {
+        url,
+        freqIndex: 2,
+        ignoreDates: document.getElementById('site-ignore-dates').checked,
+        requireCookies: document.getElementById('site-cookies').checked || rendered,
+        enableNotifications: true,
+        renderMode: rendered ? 'rendered' : 'fast',
+        selector: document.getElementById('site-selector').value.trim()
+      }
+    });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t.btnTest;
+  }
+
+  if (!res || !res.ok) {
+    const raw = (res && res.error) || '';
+    if (raw === 'invalid') {
+      showFormMessage(urlObj.protocol === 'http:' ? t.errHttpCookiesBlocked : t.alertInvalidUrl);
+    } else if (!rendered && /^Selector not found/i.test(raw)) {
+      document.getElementById('site-rendered').checked = true;
+      syncRenderedUI();
+      showFormMessage(t.testSelectorMissing, 'warn');
+    } else {
+      showFormMessage(`${t.checkError}: ${errorLabel(raw, t)}`);
+    }
+    return;
+  }
+
+  showTestResult(res, t);
+  if (!rendered && res.suggestRendered) {
+    document.getElementById('site-rendered').checked = true;
+    syncRenderedUI();
+    showFormMessage(t.testSuggestRendered, 'warn');
+  }
 }
 
 function showFormMessage(text, kind = 'error') {
@@ -456,6 +600,7 @@ function showForm(site = null, prefill = null) {
 
   pendingHttpConfirm = null;
   clearFormMessage();
+  hideTestResult();
   document.getElementById('view-list').style.display = 'none';
   document.getElementById('view-form').style.display = 'block';
 
@@ -465,7 +610,13 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-name').value = site.name;
     document.getElementById('site-url').value = site.url;
     document.getElementById('site-selector').value = site.selector || '';
-    document.getElementById('site-freq').value = site.freqIndex;
+    if (site.freqMinutes) {
+      document.getElementById('site-freq').value = 'custom';
+      document.getElementById('site-freq-custom').value = site.freqMinutes;
+    } else {
+      document.getElementById('site-freq').value = site.freqIndex;
+      document.getElementById('site-freq-custom').value = '';
+    }
     document.getElementById('site-ignore-dates').checked = site.ignoreDates !== false;
     document.getElementById('site-cookies').checked = site.requireCookies !== false;
     document.getElementById('site-notifications').checked = site.enableNotifications !== false;
@@ -477,12 +628,14 @@ function showForm(site = null, prefill = null) {
     document.getElementById('site-url').value = prefill ? prefill.url || '' : '';
     document.getElementById('site-selector').value = '';
     document.getElementById('site-freq').value = DEFAULT_FREQ_INDEX;
+    document.getElementById('site-freq-custom').value = '';
     document.getElementById('site-ignore-dates').checked = true;
     document.getElementById('site-cookies').checked = false;
     document.getElementById('site-notifications').checked = true;
     document.getElementById('site-rendered').checked = false;
   }
 
+  toggleCustomFreq();
   syncRenderedUI();
 
   if (prefill) {
@@ -534,6 +687,7 @@ async function startPicker() {
   const draft = {
     name: document.getElementById('site-name').value,
     freqIndex: document.getElementById('site-freq').value,
+    freqCustom: document.getElementById('site-freq-custom').value,
     ignoreDates: document.getElementById('site-ignore-dates').checked,
     requireCookies: document.getElementById('site-cookies').checked,
     enableNotifications: document.getElementById('site-notifications').checked,
@@ -560,6 +714,8 @@ function applyPickerDraft(draft) {
   if (!draft) return;
   document.getElementById('site-name').value = draft.name || '';
   document.getElementById('site-freq').value = draft.freqIndex;
+  document.getElementById('site-freq-custom').value = draft.freqCustom || '';
+  toggleCustomFreq();
   document.getElementById('site-ignore-dates').checked = draft.ignoreDates !== false;
   document.getElementById('site-cookies').checked = Boolean(draft.requireCookies);
   document.getElementById('site-notifications').checked = draft.enableNotifications !== false;
@@ -697,7 +853,10 @@ async function saveSite() {
   const name = document.getElementById('site-name').value.trim();
   let url = document.getElementById('site-url').value.trim();
   const selector = document.getElementById('site-selector').value.trim();
-  const freqIndex = parseInt(document.getElementById('site-freq').value, 10);
+  const freqSelect = document.getElementById('site-freq').value;
+  const isCustomFreq = freqSelect === 'custom';
+  const freqIndex = isCustomFreq ? parseInt(DEFAULT_FREQ_INDEX, 10) : parseInt(freqSelect, 10);
+  const freqMinutes = isCustomFreq ? Number(document.getElementById('site-freq-custom').value.trim()) : null;
   const ignoreDates = document.getElementById('site-ignore-dates').checked;
   const renderMode = document.getElementById('site-rendered').checked ? 'rendered' : 'fast';
   const requireCookies = document.getElementById('site-cookies').checked || renderMode === 'rendered'; // rendered always uses the browser session
@@ -710,6 +869,19 @@ async function saveSite() {
 
   if (!url.match(/^https?:\/\//i)) {
     url = 'https://' + url;
+  }
+
+  if (isCustomFreq) {
+    const minAllowed = renderMode === 'rendered' ? 5 : 1;
+    const valid = Number.isInteger(freqMinutes) && freqMinutes >= 1 && freqMinutes <= 10080;
+    if (!valid) {
+      showFormMessage(t.errFreqRange);
+      return;
+    }
+    if (freqMinutes < minAllowed) {
+      showFormMessage(t.errFreqRangeRendered);
+      return;
+    }
   }
 
   let urlObj;
@@ -749,7 +921,7 @@ async function saveSite() {
 
   const res = await callBackground({
     action: 'saveSite',
-    site: { id, name, url, freqIndex, ignoreDates, requireCookies, enableNotifications, renderMode, selector }
+    site: { id, name, url, freqIndex, freqMinutes, ignoreDates, requireCookies, enableNotifications, renderMode, selector }
   });
 
   if (!res.ok) {
@@ -777,25 +949,26 @@ async function deleteSite(siteId) {
   checkingIds.delete(siteId);
 
   // I2: keep the full record in RAM so the summary can offer UNDO.
-  const data = await chrome.storage.local.get('sites');
+  const data = await chrome.storage.local.get(['sites', 'groups']);
   const idx = (data.sites || []).findIndex((s) => s.id === siteId);
   const site = idx !== -1 ? data.sites[idx] : null;
+  const group = site && site.groupId ? ((data.groups || []).find((g) => g.id === site.groupId) || null) : null;
 
   await callBackground({ action: 'deleteSite', siteId });
   renderSites();
-  if (site) showUndoSummary(site, idx);
+  if (site) showUndoSummary(site, idx, group);
 }
 
 // I2: "Deleted: <name> - [Undo]". Restore reuses the original record
 // (with snapshots and change state) via the background 'undoDelete' action.
-function showUndoSummary(site, index) {
+function showUndoSummary(site, index, group = null) {
   const t = TRANSLATIONS[currentLang];
   showSummaryNodes([
     summaryText(`${t.deletedSummary}: `),
     summaryText(site.name),
     summaryText(` \u2022 `),
     summaryButton(t.undoDelete, async () => {
-      const res = await callBackground({ action: 'undoDelete', site, index });
+      const res = await callBackground({ action: 'undoDelete', site, index, group });
       if (!res.ok) {
         showSummary(t.undoFailed, 'warn', SUMMARY_HIDE_MS);
         return;

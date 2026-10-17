@@ -11,6 +11,9 @@ async function callBackground(message) {
   }
 }
 
-async function persistOrder(orderedIds) {
-  await callBackground({ action: 'reorderSites', order: orderedIds });
+// Whole list layout: ungrouped pages and groups in display order, e.g.
+// [{type:'site', id}, {type:'group', id, name?, siteIds:[...]}]. The background
+// stores the order and each page's group membership from it.
+async function persistLayout(layout) {
+  await callBackground({ action: 'reorderSites', layout });
 }

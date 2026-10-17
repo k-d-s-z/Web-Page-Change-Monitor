@@ -8,6 +8,9 @@ const HASH_MODE = 'v4';
 const SNAPSHOT_MAX_CHARS = 150000;
 const RENDER_LOAD_TIMEOUT_MS = 30000;
 const RENDER_GRACE_MS = 2500;
+const RENDER_MAX_WAIT_SELECTOR_MS = 10000; // wait for the selected element to appear
+const RENDER_MAX_WAIT_BODY_MS = 5000;     // whole page: cap for pages whose text never settles
+const RENDER_STABLE_MS = 600;             // text unchanged this long = rendering finished
 
 let storageQueue = Promise.resolve();
 function withStorageLock(task) {
@@ -68,12 +71,14 @@ async function updateContextMenu() {
   });
 }
 
-chrome.contextMenus.onClicked.addListener(async (info) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== CONTEXT_MENU_MONITOR_ID || !info.pageUrl) return;
 
   // Zapisujemy tylko URL (z timestampem do wygaszenia po czasie) \u2014 nazw\u0119
   // strony popup zaproponuje sam na podstawie hosta.
-  await chrome.storage.local.set({ pendingAdd: { url: info.pageUrl, ts: Date.now() } });
+  await chrome.storage.local.set({
+    pendingAdd: { url: info.pageUrl, title: String((tab && tab.title) || '').slice(0, 200), ts: Date.now() }
+  });
 
   let opened = false;
   try {
@@ -128,8 +133,12 @@ const HANDLERS = {
   undoDelete: (msg) => handleUndoDelete(msg),
   markAllRead: async () => handleMarkAllRead(),
   reorderSites: (msg) => handleReorderSites(msg),
+  updateGroup: (msg) => handleUpdateGroup(msg),
+  ungroup: (msg) => handleUngroup(msg),
+  markSitesRead: (msg) => handleMarkSitesRead(msg),
   checkAll: () => checkAllSites(),
   importSites: (msg) => handleImportSites(msg),
+  previewSite: (msg) => handlePreviewSite(msg),
   startPicker: (msg) => handleStartPicker(msg),
   pickerPicked: (msg, sender) => handlePickerPicked(msg, sender),
   pickerCancelled: (msg, sender) => handlePickerCancelled(msg, sender)
@@ -150,6 +159,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
+const MAX_CUSTOM_MINUTES = 10080; // 7 days
+const MIN_RENDERED_MINUTES = 5;
+
+// Effective check interval: a custom value typed by the user wins over the preset.
+function siteIntervalMinutes(site) {
+  const custom = Number(site.freqMinutes);
+  if (Number.isInteger(custom) && custom >= 1 && custom <= MAX_CUSTOM_MINUTES) return custom;
+  return FREQ_MAP[site.freqIndex] || 1;
+}
+
 async function setupAlarms() {
   const [data, existing] = await Promise.all([
     chrome.storage.local.get('sites'),
@@ -160,7 +179,7 @@ async function setupAlarms() {
   const wanted = new Map();
   for (const site of sites) {
     if (site.isPaused) continue;
-    wanted.set(`check_${site.id}`, FREQ_MAP[site.freqIndex] || 1);
+    wanted.set(`check_${site.id}`, siteIntervalMinutes(site));
   }
 
   const kept = new Set();
@@ -479,25 +498,41 @@ async function fetchRenderedInner(url, requireCookies, selector) {
       const timer = setTimeout(finish, RENDER_LOAD_TIMEOUT_MS);
       chrome.tabs.onUpdated.addListener(listener);
     });
-    await new Promise((resolve) => setTimeout(resolve, RENDER_GRACE_MS));
-
     // The tab may have been closed by the user or the browser meanwhile -
     // verify it still exists before injecting the script.
     try { await chrome.tabs.get(tabId); }
     catch (e) { throw new Error('Tab closed before reading'); }
+
+    // Smart wait instead of a fixed pause: poll the page until the text (of
+    // the selected fragment, or of <body>) is non-empty and has stopped
+    // changing for RENDER_STABLE_MS, with an upper cap. Fast pages finish in
+    // about a second; slow ones get up to the cap instead of a false error.
+    // A returned promise is awaited by executeScript.
     const results = await chrome.scripting.executeScript({
       target: { tabId },
-      // With a CSS selector only that fragment is captured (e.g. the results
-      // table) - navigation and other page chrome stop generating false diffs.
-      // Returns null when the selector matches nothing: treated as an error,
-      // not as an empty snapshot (never commit a bogus "change").
-      func: (sel) => {
-        const root = sel ? document.querySelector(sel) : document.body;
-        return root ? (root.innerText || '') : null;
-      },
-      args: [selector || null],
+      func: (sel, maxMs, stableMs) => new Promise((resolve) => {
+        const start = Date.now();
+        let last = null;
+        let lastChange = start;
+        const read = () => {
+          const root = sel ? document.querySelector(sel) : document.body;
+          return root ? (root.innerText || '') : null;
+        };
+        const tick = () => {
+          const cur = read();
+          const now = Date.now();
+          if (cur !== last) { last = cur; lastChange = now; }
+          if (cur !== null && cur.trim() !== '' && now - lastChange >= stableMs) return resolve(cur);
+          if (now - start >= maxMs) return resolve(cur); // null = selector never appeared
+          setTimeout(tick, 200);
+        };
+        tick();
+      }),
+      args: [selector || null, selector ? RENDER_MAX_WAIT_SELECTOR_MS : RENDER_MAX_WAIT_BODY_MS, RENDER_STABLE_MS],
       // Default ISOLATED world is enough to read innerText and safer than MAIN.
     });
+    // null = selector matched nothing: an error, never an empty snapshot
+    // (never commit a bogus "change").
     const text = (results && results[0] && results[0].result) || '';
     if (selector && results && results[0] && results[0].result === null) {
       throw new Error('Selector not found on page');
@@ -843,14 +878,26 @@ function sanitizeSiteInput(raw) {
     selector = '';
   }
 
+  // Custom interval (minutes): whole number 1..7 days, else ignored (preset used).
+  const renderMode = s.renderMode === 'rendered' ? 'rendered' : 'fast';
+  const minMinutes = renderMode === 'rendered' ? MIN_RENDERED_MINUTES : 1;
+  let freqMinutes = Number(s.freqMinutes);
+  freqMinutes = Number.isInteger(freqMinutes) && freqMinutes >= 1 && freqMinutes <= MAX_CUSTOM_MINUTES
+    ? Math.max(freqMinutes, minMinutes)
+    : null;
+  // Rendered mode opens a real window: no 1-minute preset either.
+  if (renderMode === 'rendered' && !freqMinutes && FREQ_MAP[freqIndex] < MIN_RENDERED_MINUTES) freqIndex = 1;
+
   return {
     name,
     url,
     freqIndex,
+    freqMinutes,
     ignoreDates: Boolean(s.ignoreDates),
     requireCookies,
     enableNotifications: Boolean(s.enableNotifications),
-    renderMode: s.renderMode === 'rendered' ? 'rendered' : 'fast',
+    renderMode,
+    group: String(s.group || '').trim().slice(0, 60),
     selector,
     openUrl: openUrl || url
   };
@@ -882,6 +929,7 @@ async function handleSaveSite(msg) {
       name: input.name,
       url: input.url,
       freqIndex: input.freqIndex,
+      freqMinutes: input.freqMinutes,
       ignoreDates: input.ignoreDates,
       requireCookies: input.requireCookies,
       enableNotifications: input.enableNotifications,
@@ -961,8 +1009,9 @@ async function handleImportSites(msg) {
   if (incoming.length === 0) return { ok: false };
 
   const outcome = await withStorageLock(async () => {
-    const data = await chrome.storage.local.get('sites');
+    const data = await chrome.storage.local.get(['sites', 'groups']);
     const sites = data.sites || [];
+    const groups = data.groups || [];
     const seen = new Set(sites.map((s) => siteIdentity(s.url)));
 
     const addedOrigins = [];
@@ -980,9 +1029,21 @@ async function handleImportSites(msg) {
       seen.add(identity);
 
       const siteId = newSiteId();
-      sites.push({
+      // Group by NAME (backups carry names): reuse a group with the same name or create one.
+      const { group: groupName, ...fieldsOnly } = input;
+      let groupId = null;
+      if (groupName) {
+        let g = groups.find((x) => x.name.toLowerCase() === groupName.toLowerCase());
+        if (!g) {
+          g = { id: newSiteId(), name: cleanGroupName(groupName), collapsed: false };
+          groups.push(g);
+        }
+        groupId = g.id;
+      }
+      const record = {
         id: siteId,
-        ...input,
+        ...fieldsOnly,
+        groupId,
         isPaused: false,
         hasChanged: false,
         lastHash: '',
@@ -994,7 +1055,11 @@ async function handleImportSites(msg) {
         prevSnapshot: '',
         lastSnapshot: '',
         changedAt: null
-      });
+      };
+      // keep the group contiguous: insert after its last member
+      let lastIdx = -1;
+      if (groupId) sites.forEach((s, i) => { if (s.groupId === groupId) lastIdx = i; });
+      if (lastIdx >= 0) sites.splice(lastIdx + 1, 0, record); else sites.push(record);
 
       let urlObj;
       try { urlObj = new URL(input.url); } catch (e) { urlObj = null; }
@@ -1003,7 +1068,7 @@ async function handleImportSites(msg) {
     }
 
     const skippedCount = skippedByReason.limit + skippedByReason.invalid + skippedByReason.duplicate;
-    await chrome.storage.local.set({ sites });
+    await chrome.storage.local.set({ sites, groups });
     return { addedCount: addedIds.length, skippedCount, skippedByReason, origins: [...new Set(addedOrigins)], addedIds };
   });
 
@@ -1029,11 +1094,13 @@ async function handleToggleSite(msg) {
 async function handleDeleteSite(msg) {
   const siteId = String((msg && msg.siteId) || '');
   const removedUrl = await withStorageLock(async () => {
-    const data = await chrome.storage.local.get('sites');
+    const data = await chrome.storage.local.get(['sites', 'groups']);
     const sites = data.sites || [];
     const site = sites.find((s) => s.id === siteId);
     if (!site) return null;
-    await chrome.storage.local.set({ sites: sites.filter((s) => s.id !== siteId) });
+    const rest = sites.filter((s) => s.id !== siteId);
+    const groups = pruneGroups(rest, data.groups || []); // a group left empty disappears
+    await chrome.storage.local.set({ sites: rest, groups });
     return site.url;
   });
 
@@ -1053,7 +1120,7 @@ async function handleUndoDelete(msg) {
   const index = Number.isInteger(msg.index) ? msg.index : -1;
 
   const outcome = await withStorageLock(async () => {
-    const data = await chrome.storage.local.get('sites');
+    const data = await chrome.storage.local.get(['sites', 'groups']);
     const sites = data.sites || [];
 
     // Undo is best-effort: if the record reappeared meanwhile, treat as done.
@@ -1075,7 +1142,18 @@ async function handleUndoDelete(msg) {
     if (index >= 0 && index <= inserted.length) inserted.splice(index, 0, copy);
     else inserted.push(copy);
 
-    await chrome.storage.local.set({ sites: inserted });
+    // Restore the page into its group; recreate the group if it vanished
+    // together with its last page (the popup sends the group record).
+    let groups = data.groups || [];
+    if (copy.groupId && !groups.some((g) => g.id === copy.groupId)) {
+      const g = msg.group;
+      if (g && g.id === copy.groupId) {
+        groups = [...groups, { id: String(g.id), name: cleanGroupName(g.name), collapsed: Boolean(g.collapsed) }];
+      } else {
+        copy.groupId = null;
+      }
+    }
+    await chrome.storage.local.set({ sites: inserted, groups });
     return { ok: true, origins: [originPattern(copy.url)].filter(Boolean) };
   });
 
@@ -1100,21 +1178,132 @@ async function handleMarkAllRead() {
   await updateBadge();
   return { ok: true };
 }
+// --- Groups ---
+// storage.groups = [{ id, name, collapsed }]; site.groupId points into it.
+// The sites array stays flat (its order is the display order).
+
+function cleanGroupName(name) {
+  return String(name || '').trim().slice(0, 60) || 'Group';
+}
+
+// Drops groups without members and clears dangling groupId references.
+function pruneGroups(sites, groups) {
+  const used = new Set(sites.map((s) => s.groupId).filter(Boolean));
+  const kept = groups.filter((g) => used.has(g.id));
+  const keptIds = new Set(kept.map((g) => g.id));
+  sites.forEach((s) => {
+    if (s.groupId && !keptIds.has(s.groupId)) s.groupId = null;
+  });
+  return kept;
+}
+
+// Accepts the new "layout" (ungrouped pages + groups in display order) or the
+// legacy flat "order" list.
 async function handleReorderSites(msg) {
+  const layout = Array.isArray(msg && msg.layout) ? msg.layout : null;
   const order = Array.isArray(msg && msg.order) ? msg.order.map(String) : [];
+
   await withStorageLock(async () => {
-    const data = await chrome.storage.local.get('sites');
+    const data = await chrome.storage.local.get(['sites', 'groups']);
     const sites = data.sites || [];
     const byId = new Map(sites.map((s) => [s.id, s]));
 
-    const reordered = order.map((id) => byId.get(id)).filter(Boolean);
-    const listed = new Set(reordered.map((s) => s.id));
+    if (!layout) {
+      const reordered = order.map((id) => byId.get(id)).filter(Boolean);
+      const listed = new Set(reordered.map((s) => s.id));
+      sites.forEach((s) => {
+        if (!listed.has(s.id)) reordered.push(s);
+      });
+      await chrome.storage.local.set({ sites: reordered });
+      return;
+    }
+
+    const oldGroups = new Map((data.groups || []).map((g) => [g.id, g]));
+    const seen = new Set();
+    const ordered = [];
+    const groupList = [];
+
+    const take = (id, groupId) => {
+      const s = byId.get(String(id));
+      if (!s || seen.has(s.id)) return false;
+      seen.add(s.id);
+      s.groupId = groupId;
+      ordered.push(s);
+      return true;
+    };
+
+    for (const item of layout) {
+      if (!item || typeof item !== 'object') continue;
+      if (item.type === 'group' && Array.isArray(item.siteIds)) {
+        const gid = String(item.id || '').slice(0, 64);
+        if (!gid) continue;
+        let any = false;
+        for (const id of item.siteIds) any = take(id, gid) || any;
+        if (any && !groupList.some((g) => g.id === gid)) {
+          groupList.push(oldGroups.get(gid) || { id: gid, name: cleanGroupName(item.name), collapsed: false });
+        }
+      } else if (item.type === 'site') {
+        take(item.id, null);
+      }
+    }
+
+    // Pages missing from the layout keep their place at the end and their group.
     sites.forEach((s) => {
-      if (!listed.has(s.id)) reordered.push(s);
+      if (!seen.has(s.id)) ordered.push(s);
+    });
+    const known = new Set(groupList.map((g) => g.id));
+    ordered.forEach((s) => {
+      if (s.groupId && !known.has(s.groupId) && oldGroups.has(s.groupId)) {
+        groupList.push(oldGroups.get(s.groupId));
+        known.add(s.groupId);
+      }
     });
 
-    await chrome.storage.local.set({ sites: reordered });
+    const groups = pruneGroups(ordered, groupList);
+    await chrome.storage.local.set({ sites: ordered, groups });
   });
+  return { ok: true };
+}
+
+async function handleUpdateGroup(msg) {
+  const id = String((msg && msg.id) || '');
+  await withStorageLock(async () => {
+    const data = await chrome.storage.local.get('groups');
+    const groups = data.groups || [];
+    const g = groups.find((x) => x.id === id);
+    if (!g) return;
+    if (typeof msg.name === 'string' && msg.name.trim()) g.name = cleanGroupName(msg.name);
+    if (typeof msg.collapsed === 'boolean') g.collapsed = msg.collapsed;
+    await chrome.storage.local.set({ groups });
+  });
+  return { ok: true };
+}
+
+// Removes the group only; its pages stay in place on the list.
+async function handleUngroup(msg) {
+  const id = String((msg && msg.id) || '');
+  await withStorageLock(async () => {
+    const data = await chrome.storage.local.get(['sites', 'groups']);
+    const sites = data.sites || [];
+    sites.forEach((s) => { if (s.groupId === id) s.groupId = null; });
+    const groups = (data.groups || []).filter((g) => g.id !== id);
+    await chrome.storage.local.set({ sites, groups });
+  });
+  return { ok: true };
+}
+
+async function handleMarkSitesRead(msg) {
+  const ids = new Set(Array.isArray(msg && msg.siteIds) ? msg.siteIds.map(String) : []);
+  await withStorageLock(async () => {
+    const data = await chrome.storage.local.get('sites');
+    const sites = data.sites || [];
+    let touched = false;
+    sites.forEach((s) => {
+      if (ids.has(s.id) && s.hasChanged) { s.hasChanged = false; touched = true; }
+    });
+    if (touched) await chrome.storage.local.set({ sites });
+  });
+  await updateBadge();
   return { ok: true };
 }
 
@@ -1131,6 +1320,44 @@ function pickerHintText(lang) {
   return lang === 'pl'
     ? 'Kliknij fragment strony, kt\u00f3ry chcesz monitorowa\u0107. Esc anuluje.'
     : 'Click the part of the page you want to watch. Esc cancels.';
+}
+
+// "Test check" in the form: one throw-away check (nothing is stored) that shows
+// what would actually be monitored, so mode/selector problems surface BEFORE saving.
+async function handlePreviewSite(msg) {
+  const input = sanitizeSiteInput({ name: 'preview', ...((msg && msg.site) || {}) });
+  if (!input) return { ok: false, error: 'invalid' };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const rendered = input.renderMode === 'rendered';
+    let text;
+    let suggestRendered = false;
+
+    if (rendered) {
+      text = (await fetchRendered(input.url, true, input.selector)).text || '';
+    } else {
+      const res = await fetchHtml(input.url, input.requireCookies, controller.signal, null);
+      const rawLen = (res.text || '').length;
+      const html = input.selector ? await extractFragment(res.text, input.selector) : res.text;
+      text = cleanHtmlStructured(html);
+      suggestRendered = !input.selector && rawLen > 500 && text.length < 500;
+    }
+
+    const lines = text ? text.split('\n') : [];
+    const preview = lines.slice(0, 12)
+      .map((l) => (l.length > 140 ? l.slice(0, 140) + '\u2026' : l))
+      .join('\n');
+    return { ok: true, chars: text.length, lines: lines.length, preview, suggestRendered };
+  } catch (error) {
+    const message = error && error.name === 'AbortError'
+      ? 'Timeout'
+      : (error && error.message) || String(error);
+    return { ok: false, error: message };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function handleStartPicker(msg) {

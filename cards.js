@@ -71,14 +71,23 @@ function errorLabel(raw, t) {
   return msg.length > 40 ? msg.slice(0, 40) + '\u2026' : (msg || t.checkError);
 }
 
+// Custom interval label: "15 min", "3 hr", "2 d" (PL: "3 godz", "2 dn.").
+function formatInterval(minutes) {
+  const pl = currentLang === 'pl';
+  if (minutes % 1440 === 0) return `${minutes / 1440} ${pl ? 'dn.' : 'd'}`;
+  if (minutes % 60 === 0) return `${minutes / 60} ${pl ? 'godz' : 'hr'}`;
+  return `${minutes} min`;
+}
+
 function buildCard(site, flash = null) {
   const t = TRANSLATIONS[currentLang];
   const card = document.createElement('div');
   card.className = `site-card ${site.isPaused ? 'paused' : ''}`;
   card.dataset.id = site.id;
+  card.dataset.name = site.name;
   card.tabIndex = 0;
 
-  const labelFreq = t.freqLabels[site.freqIndex] || t.freqLabels[0];
+  const labelFreq = site.freqMinutes ? formatInterval(site.freqMinutes) : (t.freqLabels[site.freqIndex] || t.freqLabels[0]);
   // U4: pauza widoczna te\u017c tekstowo, nie tylko przez opacity.
   const pausedBadge = site.isPaused ? `<span class="badge-paused">${t.badgePaused}</span>` : '';
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
@@ -102,7 +111,8 @@ function buildCard(site, flash = null) {
     : '';
   // The link stays as long as a stored previous version exists (not only while
   // the change is unread) - opening the page must not remove access to the diff.
-  const diffHtml = site.prevSnapshot && site.changedAt
+  // Link only for an UNREAD change (cleared once the page/diff is opened).
+  const diffHtml = site.hasChanged && site.prevSnapshot
     ? ` &bull; <a href="#" class="link-diff" title="${t.titleDiff}">${t.linkDiff}</a>`
     : '';
 
@@ -208,13 +218,17 @@ async function refreshCard(siteId, flash = null) {
   if (!card || card.classList.contains('dragging')) return;
 
   card.replaceWith(buildCard(site, flash));
+  syncGroupBadges(data.sites || []);
   if (flash && flash.text) announce(flash.text);
 }
 
 async function renderSites() {
   const container = document.getElementById('sites-container');
-  const data = await chrome.storage.local.get('sites');
+  const data = await chrome.storage.local.get(['sites', 'groups', 'groupTipDone']);
   const sites = data.sites || [];
+  const groups = data.groups || [];
+  // The drag tip is only needed until the user has discovered grouping.
+  groupTipDone = Boolean(data.groupTipDone) || groups.length > 0;
 
   document.getElementById('site-count-badge').textContent = `(${sites.length}/${MAX_SITES})`;
 
@@ -243,7 +257,26 @@ async function renderSites() {
     return;
   }
 
-  container.replaceChildren(...visible.map((site) => buildCard(site)));
+  // Ungrouped pages are cards; a group is drawn once, at the position of its
+  // first member, with all its members inside.
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const emitted = new Set();
+  const nodes = [];
+  for (const site of visible) {
+    const group = site.groupId ? groupById.get(site.groupId) : null;
+    if (!group) {
+      nodes.push(buildCard(site));
+      continue;
+    }
+    if (emitted.has(group.id)) continue;
+    emitted.add(group.id);
+    nodes.push(buildGroup(
+      group,
+      visible.filter((s) => s.groupId === group.id),
+      sites.filter((s) => s.groupId === group.id)
+    ));
+  }
+  container.replaceChildren(...nodes);
 
   activeSiteCount = sites.filter((s) => !s.isPaused).length;
   updateRefreshAllButton();

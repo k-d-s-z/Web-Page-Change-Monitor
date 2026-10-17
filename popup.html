@@ -809,6 +809,157 @@
       overflow: hidden;
       min-height: 0;
     }
+    .freq-custom {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .freq-custom input {
+      width: 110px;
+    }
+    .freq-unit {
+      font-size: 13px;
+      color: var(--text-2);
+    }
+
+    /* "Test check" result: what the monitor would actually read. */
+    #btn-test {
+      margin: 0 0 10px;
+    }
+    .test-result {
+      display: none;
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-soft);
+      max-height: 150px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .test-result.show {
+      display: block;
+    }
+    .test-result.warn {
+      border-color: var(--warn);
+    }
+    .test-result .tr-head {
+      font-weight: 700;
+      color: var(--text-strong);
+      margin-bottom: 4px;
+    }
+
+    /* Hint shown in the footer only while a page is being dragged. */
+    .drag-hint {
+      display: none;
+      margin-bottom: 6px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--brand-hover);
+      color: var(--white);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .drag-hint.show {
+      display: block;
+    }
+
+    /* Groups of pages (groups.js) */
+    .group {
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 8px 2px;
+      margin-bottom: 8px;
+      transition: border-color 0.2s ease;
+    }
+    .group.drop-into,
+    .group.dragging {
+      border-color: var(--brand);
+    }
+    .group.dragging {
+      position: relative;
+      z-index: 2;
+      background: var(--bg-soft);
+    }
+    .group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .group.collapsed .group-header {
+      margin-bottom: 6px;
+    }
+    .group-header .drag-handle {
+      margin: 0;
+    }
+    .group-toggle {
+      min-width: 28px;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+    }
+    .group-toggle svg {
+      transition: transform 0.2s ease;
+    }
+    .group.collapsed .group-toggle svg {
+      transform: rotate(-90deg);
+    }
+    .group-title {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-strong);
+    }
+    .group-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .group-count {
+      flex: none;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-2);
+    }
+    .group-title .badge-changed {
+      flex: none;
+      margin-left: 0;
+    }
+    .group-name-input {
+      flex: 1;
+      min-width: 0;
+      padding: 4px 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .group-header .actions {
+      gap: 4px;
+    }
+    .group.collapsed .group-body {
+      display: none;
+    }
+    .site-card.merge-target {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 2px var(--brand);
+      background: var(--bg-active);
+    }
+
     .form-message {
       display: none;
       background: var(--bg-active);
@@ -945,6 +1096,7 @@
 
     <div id="sites-container"></div>
     <div class="list-footer">
+      <div id="drag-hint" class="drag-hint" role="status" aria-live="polite"></div>
       <div id="refresh-summary" class="refresh-summary" role="status" aria-live="polite"></div>
     </div>
   </div>
@@ -980,7 +1132,12 @@
         <option value="2" data-i18n="opt10m">Every 10 minutes</option>
         <option value="3" data-i18n="opt1h">Every 1 hour</option>
         <option value="4" data-i18n="opt24h">Once a day</option>
+        <option value="custom" data-i18n="optCustom">Custom&hellip;</option>
       </select>
+      <div id="freq-custom" class="freq-custom" style="display: none;">
+        <input type="number" id="site-freq-custom" min="1" max="10080" step="1" inputmode="numeric" placeholder="15">
+        <span class="freq-unit" data-i18n="lblMinutes">minutes</span>
+      </div>
     </div>
 
     <div class="checkbox-row">
@@ -1038,6 +1195,9 @@
       </div>
     </div>
 
+    <button type="button" id="btn-test" class="btn-secondary btn-pick" data-i18n="btnTest">Test check</button>
+    <div id="test-result" class="test-result" role="status" aria-live="polite"></div>
+
     <div id="form-message" class="form-message" role="alert"></div>
 
     <button id="btn-save" class="btn-main" data-i18n="btnSave">Save</button>
@@ -1050,6 +1210,7 @@
   <script src="i18n.js"></script>
   <script src="storage.js"></script>
   <script src="cards.js"></script>
+  <script src="groups.js"></script>
   <script src="drag.js"></script>
   <script src="popup.js"></script>
 
