@@ -45,7 +45,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await renderSites();
 
   await maybeOpenPendingAdd();
-  await maybeRestorePicker();
+  const pickerRestored = await maybeRestorePicker();
+  // Wizard interrupted (e.g. popup closed by the permission dialog): resume it.
+  if (!pickerRestored) await maybeRestoreWizard();
   maybeShowChangedHint();
 
   document.getElementById('btn-add-view').addEventListener('click', openAddForm);
@@ -94,8 +96,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDragAndDrop(document.getElementById('sites-container'));
 });
 
-// Wrapper na chrome.runtime.sendMessage ÃÂ¢ÃÂÃÂ nigdy nie rzuca; bÃÂÃÂÃÂÃÂd kanaÃÂÃÂu
-// zwracany jest jako { ok: false, error }, ÃÂÃÂ¼eby wywoÃÂÃÂujÃÂÃÂcy mÃÂÃÂ³gÃÂÃÂ go obsÃÂÃÂuÃÂÃÂ¼yÃÂÃÂ.
+// Wrapper na chrome.runtime.sendMessage ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ nigdy nie rzuca; bÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂd kanaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂu
+// zwracany jest jako { ok: false, error }, ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼eby wywoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂujÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂcy mÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³gÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ go obsÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂuÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼yÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ.
 async function callBackground(msg) {
   try {
     return await chrome.runtime.sendMessage(msg);
@@ -645,12 +647,12 @@ function showForm(site = null, prefill = null) {
   }
 }
 
-// --- ÃÂ¢ÃÂÃÂWybierz element na stronieÃÂ¢ÃÂÃÂ¦ÃÂ¢ÃÂÃÂ (element picker) ----------------------
-// Otwiera monitorowany URL w nowej karcie z wstrzykniÃÂÃÂtym pickerem
-// (patrz picker.js): najechanie podÃÂÃÂwietla fragment, klik wybiera element
-// i generuje selektor. Popup w tym czasie siÃÂÃÂ zamknie (karta przejmuje
-// focus), wiÃÂÃÂc wynik wraca przez storage (pendingPicker), a przy
-// kolejnym otwarciu popupu przywracamy formularz z uzupeÃÂÃÂnionym polem.
+// --- ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂWybierz element na stronieÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¦ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ (element picker) ----------------------
+// Otwiera monitorowany URL w nowej karcie z wstrzykniÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂtym pickerem
+// (patrz picker.js): najechanie podÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂwietla fragment, klik wybiera element
+// i generuje selektor. Popup w tym czasie siÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ zamknie (karta przejmuje
+// focus), wiÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂc wynik wraca przez storage (pendingPicker), a przy
+// kolejnym otwarciu popupu przywracamy formularz z uzupeÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂnionym polem.
 async function startPicker() {
   const t = TRANSLATIONS[currentLang];
   clearFormMessage();
@@ -666,9 +668,9 @@ async function startPicker() {
     return;
   }
 
-  // chrome.scripting w karcie wymaga uprawnienia hosta ÃÂ¢ÃÂÃÂ tego samego,
-  // ktÃÂÃÂ³re i tak wymaga samo monitorowanie. ProÃÂÃÂba musi nastÃÂÃÂpiÃÂÃÂ w geÃÂÃÂcie
-  // uÃÂÃÂ¼ytkownika (klik), dlatego jest tutaj, a nie w tle.
+  // chrome.scripting w karcie wymaga uprawnienia hosta ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ tego samego,
+  // ktÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³re i tak wymaga samo monitorowanie. ProÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂba musi nastÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂpiÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ w geÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂcie
+  // uÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ytkownika (klik), dlatego jest tutaj, a nie w tle.
   const pattern = `${new URL(url).origin}/*`;
   const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
   if (!hasPermission) {
@@ -706,7 +708,7 @@ async function startPicker() {
     showFormMessage(res && res.error === 'permission' ? t.pickerPermission : t.errSave);
     return;
   }
-  // StÃÂÃÂd popup zamknie siÃÂÃÂ sam, gdy karta przejmie focus; wynik odbierze
+  // StÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂd popup zamknie siÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ sam, gdy karta przejmie focus; wynik odbierze
   // maybeRestorePicker() przy kolejnym otwarciu.
 }
 
@@ -736,12 +738,16 @@ function applyNeedsRendered(picked) {
 async function maybeRestorePicker() {
   const data = await chrome.storage.local.get(['pendingPicker', 'pickerDraft']);
   const picked = data.pendingPicker;
-  if (!picked || !picked.selector) return;
+  if (!picked || !picked.selector) return false;
 
   if (data.pickerDraft && data.pickerDraft.wizard) {
     await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
-    restoreWizardWithSelector(picked, data.pickerDraft);
-    return;
+    // Stale wizard picker draft (abandoned >15 min ago): do not resurrect
+    // the wizard - that hijacked every popup open. Just drop everything.
+    if (Date.now() - (data.pickerDraft.ts || 0) <= 15 * 60 * 1000) {
+      restoreWizardWithSelector(picked, data.pickerDraft);
+    }
+    return true;
   }
 
   await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
@@ -762,11 +768,12 @@ async function maybeRestorePicker() {
     document.getElementById('site-selector').value = picked.selector;
     showFormMessage(applyNeedsRendered(picked) ? t.pickerDoneRendered : t.pickerDone);
   }
+  return true;
 }
 
-// --- SpÃÂÃÂ³jny system popoverÃÂÃÂ³w ÃÂ¢ÃÂÃÂiÃÂ¢ÃÂÃÂ (dodatkowe wyjaÃÂÃÂnienia opcji) -----------
-// Jeden wspÃÂÃÂ³ÃÂÃÂdzielony element #popover; treÃÂÃÂÃÂÃÂ brana w chwili otwarcia z
-// TRANSLATIONS[data-popover], wiÃÂÃÂc zmiana jÃÂÃÂzyka nie wymaga odÃÂÃÂwieÃÂÃÂ¼ania.
+// --- SpÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³jny system popoverÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³w ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂiÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ (dodatkowe wyjaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂnienia opcji) -----------
+// Jeden wspÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂdzielony element #popover; treÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ brana w chwili otwarcia z
+// TRANSLATIONS[data-popover], wiÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂc zmiana jÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂzyka nie wymaga odÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂwieÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ania.
 const POPOVER_EL = document.getElementById('popover');
 let popoverOwner = null;
 
@@ -822,7 +829,7 @@ document.querySelectorAll('.info-btn').forEach((btn) => {
   });
 });
 
-// Klik poza popoverem i Escape go zamykajÃÂÃÂ (jak panel ustawieÃÂÃÂ).
+// Klik poza popoverem i Escape go zamykajÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ (jak panel ustawieÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ).
 document.addEventListener('click', (e) => {
   if (!popoverOwner) return;
   if (popoverOwner.contains(e.target) || POPOVER_EL.contains(e.target)) return;

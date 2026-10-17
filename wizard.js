@@ -13,6 +13,11 @@
 
 let wizardState = null;
 
+// A wizard draft older than this is abandoned (user closed the popup without
+// Cancel/Save) and must NOT resurrect the wizard on every later popup open -
+// that made the extension icon behave like the "+" button.
+const WIZARD_DRAFT_MAX_AGE_MS = 15 * 60 * 1000;
+
 const WIZARD_PLACEHOLDERS = {
   en: { name: 'e.g. News / Store', url: 'https://...', selector: '#content, .results, main' },
   pl: { name: 'np. Wiadomo\u015bci / Sklep', url: 'https://...', selector: '#content, .results, main' }
@@ -54,6 +59,7 @@ function saveWizardDraft() {
   try {
     chrome.storage.local.set({
       wizardDraft: {
+        ts: Date.now(),
         step: s.step,
         url: s.url,
         name: s.name,
@@ -124,13 +130,13 @@ function renderWizard() {
   }
 
   if (s.step === 3) {
-    document.getElementById('wizard-cookies').checked = s.requireCookies;
-  }
-
-  if (s.step === 4) {
     const sel = document.getElementById('wizard-selector');
     if (document.activeElement !== sel) sel.value = s.selector;
     sel.placeholder = ph.selector;
+  }
+
+  if (s.step === 4) {
+    document.getElementById('wizard-cookies').checked = s.requireCookies;
   }
 
   if (s.step === 5) {
@@ -245,6 +251,17 @@ async function wizardNext() {
     let urlObj;
     try { urlObj = new URL(url); } catch (err) { showWizardMessage(t.alertInvalidUrl); return; }
 
+    // Duplicate check right at the first step - walking the whole wizard just
+    // to hear "already on the list" at the end would waste the user's time.
+    {
+      const data = await chrome.storage.local.get('sites');
+      const identity = urlObj.href;
+      const dup = (data.sites || []).some((x) => {
+        try { return new URL(x.url).href === identity; } catch (e) { return false; }
+      });
+      if (dup) { showWizardMessage(t.errDuplicate); return; }
+    }
+
     // Persist FIRST (step 2, detection pending): if the permission dialog
     // closes this popup, the wizard resumes on the next open instead of
     // making the user start over.
@@ -272,14 +289,17 @@ async function wizardNext() {
 
   if (s.step === 2) { wizardGo(3); return; }
 
+  // Step 3 (selector) comes BEFORE the cookie question on purpose: the picker
+  // works without knowing anything about the login, and the final render-mode
+  // check can then use the complete settings (cookies included).
   if (s.step === 3) {
-    s.requireCookies = document.getElementById('wizard-cookies').checked || s.rendered;
+    s.selector = document.getElementById('wizard-selector').value.trim();
     wizardGo(4);
     return;
   }
 
   if (s.step === 4) {
-    s.selector = document.getElementById('wizard-selector').value.trim();
+    s.requireCookies = document.getElementById('wizard-cookies').checked || s.rendered;
     wizardGo(5);
     // Cookies/selector are known only now - verify the render mode once more.
     maybeFinalRenderCheck();
@@ -338,6 +358,7 @@ async function wizardPick() {
   // the tab takes focus, and maybeRestorePicker() brings the user back here.
   const draft = {
     wizard: true,
+    ts: Date.now(),
     step: s.step,
     url: s.url,
     name: s.name,
@@ -381,16 +402,28 @@ function restoreWizardWithSelector(picked, draft) {
   s.freqIndex = (draft && draft.freqIndex) || DEFAULT_FREQ_INDEX;
   s.ignoreDates = draft ? draft.ignoreDates !== false : true;
   s.enableNotifications = draft ? draft.enableNotifications !== false : true;
-  wizardGo(4);
+  wizardGo(3); // step 3 is now the selector step - let the user refine or move on
 }
 
 // Popup was closed while the wizard was running (e.g. the permission dialog):
 // bring the wizard back at the exact step, and finish a pending detection.
+// The guard flag makes it safe to call from both popup.js and the fallback
+// below (only one restore per popup open, no double init).
+let wizardRestoreStarted = false;
+
 async function maybeRestoreWizard() {
+  if (wizardRestoreStarted) return false;
+  wizardRestoreStarted = true;
   if (wizardState) return false; // already running (e.g. pendingAdd)
   const data = await chrome.storage.local.get('wizardDraft');
   const d = data.wizardDraft;
   if (!d || !d.url) return false;
+
+  // Stale draft (abandoned wizard): drop it instead of hijacking the popup.
+  if (Date.now() - (d.ts || 0) > WIZARD_DRAFT_MAX_AGE_MS) {
+    await chrome.storage.local.remove('wizardDraft');
+    return false;
+  }
 
   wizardState = {
     step: Math.min(Math.max(parseInt(d.step, 10) || 1, 1), 5),
@@ -416,6 +449,10 @@ async function maybeRestoreWizard() {
     } else if (!wizardState.rendered) {
       wizardGo(3);
     }
+  } else if (wizardState.step === 4 && !wizardState.finalCheckDone) {
+    // Popup died between the cookie question and the final render check.
+    wizardGo(5);
+    maybeFinalRenderCheck();
   } else if (wizardState.step === 5) {
     maybeFinalRenderCheck();
   }
@@ -436,4 +473,18 @@ document.addEventListener('DOMContentLoaded', () => {
     wizardState.freqIndex = (wizardState.rendered && freqIndex === 0) ? 1 : freqIndex;
     saveWizardDraft();
   });
+
+  // Self-restore fallback: popup.js normally calls maybeRestoreWizard(), but
+  // if its build lags behind, the wizard still recovers on its own after the
+  // permission dialog closes the popup. The timeout lets the pendingAdd and
+  // picker flows (which may already start a wizard) run first.
+  setTimeout(async () => {
+    if (
+      !wizardState
+      && document.getElementById('view-wizard').style.display === 'none'
+      && document.getElementById('view-form').style.display === 'none'
+    ) {
+      await maybeRestoreWizard();
+    }
+  }, 250);
 });

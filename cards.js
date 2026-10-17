@@ -9,9 +9,9 @@ function escapeHtml(str) {
 }
 
 // Favicona przez wbudowane API chrome://favicon (uprawnienie "favicon" +
-// web_accessible_resources w manifeÅcie) â czyta z lokalnej pamiÄci
-// podrÄcznej przeglÄdarki, bez Å¼adnego zapytania do serwera strony czy
-// zewnÄtrznego serwisu (np. Google favicon service).
+// web_accessible_resources w manifeÃÂcie) Ã¢ÂÂ czyta z lokalnej pamiÃÂci
+// podrÃÂcznej przeglÃÂdarki, bez ÃÂ¼adnego zapytania do serwera strony czy
+// zewnÃÂtrznego serwisu (np. Google favicon service).
 function faviconUrl(pageUrl, size = 32) {
   const url = new URL(chrome.runtime.getURL('/_favicon/'));
   url.searchParams.set('pageUrl', pageUrl);
@@ -19,8 +19,8 @@ function faviconUrl(pageUrl, size = 32) {
   return url.toString();
 }
 
-// Jednolity zestaw ikon liniowych (stroke = currentColor), dziÄki czemu
-// kolor ikon wynika wyÅÄcznie z CSS i nie zaleÅ¼y od czcionki emoji systemu.
+// Jednolity zestaw ikon liniowych (stroke = currentColor), dziÃÂki czemu
+// kolor ikon wynika wyÃÂÃÂcznie z CSS i nie zaleÃÂ¼y od czcionki emoji systemu.
 const SVG_OPEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
 const ICONS = {
   refresh: `${SVG_OPEN}<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
@@ -31,16 +31,16 @@ const ICONS = {
   warning: '<svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
 };
 
-// I3: czas wzglÄdny dla ÅwieÅ¼ych sprawdzeÅ (âX min temu"), dokÅadna data
-// tylko dla starszych niÅ¼ 24 h â uÅ¼ytkownik od razu widzi, jak âÅwieÅ¼e"
-// jest ostatnie sprawdzenie, bez porÃ³wnywania zegarka z etykietÄ.
+// I3: czas wzglÃÂdny dla ÃÂwieÃÂ¼ych sprawdzeÃÂ (Ã¢ÂÂX min temu"), dokÃÂadna data
+// tylko dla starszych niÃÂ¼ 24 h Ã¢ÂÂ uÃÂ¼ytkownik od razu widzi, jak Ã¢ÂÂÃÂwieÃÂ¼e"
+// jest ostatnie sprawdzenie, bez porÃÂ³wnywania zegarka z etykietÃÂ.
 function formatLastCheck(timestamp) {
   const locale = currentLang === 'pl' ? 'pl-PL' : 'en-US';
   const pl = currentLang === 'pl';
   const date = new Date(timestamp);
   const diffMs = Date.now() - timestamp;
 
-  if (diffMs < 60_000) return pl ? 'wÅaÅnie teraz' : 'just now';
+  if (diffMs < 60_000) return pl ? 'w\u0142a\u015bnie teraz' : 'just now';
   const mins = Math.floor(diffMs / 60_000);
   if (mins < 60) return pl ? `${mins} min temu` : `${mins} min ago`;
   if (mins < 24 * 60) {
@@ -88,7 +88,7 @@ function buildCard(site, flash = null) {
   card.tabIndex = 0;
 
   const labelFreq = site.freqMinutes ? formatInterval(site.freqMinutes) : (t.freqLabels[site.freqIndex] || t.freqLabels[0]);
-  // U4: pauza widoczna teÅ¼ tekstowo, nie tylko przez opacity.
+  // U4: pauza widoczna teÃÂ¼ tekstowo, nie tylko przez opacity.
   const pausedBadge = site.isPaused ? `<span class="badge-paused">${t.badgePaused}</span>` : '';
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
   const lastCheck = site.lastCheckTime ? formatLastCheck(site.lastCheckTime) : '&mdash;';
@@ -101,9 +101,9 @@ function buildCard(site, flash = null) {
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
     : '';
-  // U1: link do podglÄdu zmian â widoczny tylko przy NIEODCZYTANEJ zmianie.
-  // KlikniÄcie otwiera diff i czyÅci hasChanged (refreshSiteContent),
-  // wiÄc po obejrzeniu zmian przycisk znika.
+  // U1: link do podglÃÂdu zmian Ã¢ÂÂ widoczny tylko przy NIEODCZYTANEJ zmianie.
+  // KlikniÃÂcie otwiera diff i czyÃÂci hasChanged (refreshSiteContent),
+  // wiÃÂc po obejrzeniu zmian przycisk znika.
   // Heuristic flag: the page shell is large but readable text is tiny ->
   // suggest switching to rendered mode (JS draws the content).
   const suggestHtml = site.suggestRendered
@@ -182,9 +182,9 @@ function buildCard(site, flash = null) {
 
   card.addEventListener('keydown', onCardKeyDown);
 
-  // A1: Enter/Spacja na karcie (na .site-info) otwiera âotwieranÄ stronÄ"
-  // â dotÄd obsÅuga klawiatury koÅczyÅa siÄ na strzaÅkach z drag.js.
-  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnÄtrz.
+  // A1: Enter/Spacja na karcie (na .site-info) otwiera Ã¢ÂÂotwieranÃÂ stronÃÂ"
+  // Ã¢ÂÂ dotÃÂd obsÃÂuga klawiatury koÃÂczyÃÂa siÃÂ na strzaÃÂkach z drag.js.
+  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnÃÂtrz.
   card.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (e.target.closest('button, a, input, select, textarea')) return;
@@ -232,7 +232,7 @@ async function renderSites() {
 
   document.getElementById('site-count-badge').textContent = `(${sites.length}/${MAX_SITES})`;
 
-  // Pusty stan (U6): zamiast pustego kontenera â wyraÅ¼ne CTA.
+  // Pusty stan (U6): zamiast pustego kontenera Ã¢ÂÂ wyraÃÂ¼ne CTA.
   if (sites.length === 0) {
     const emptyEl = document.createElement('div');
     emptyEl.className = 'empty-state';
