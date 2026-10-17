@@ -139,7 +139,6 @@ const HANDLERS = {
   checkAll: () => checkAllSites(),
   importSites: (msg) => handleImportSites(msg),
   previewSite: (msg) => handlePreviewSite(msg),
-  grantDone: (msg, sender) => handleGrantDone(msg, sender),
   startPicker: (msg) => handleStartPicker(msg),
   pickerPicked: (msg, sender) => handlePickerPicked(msg, sender),
   pickerCancelled: (msg, sender) => handlePickerCancelled(msg, sender)
@@ -459,6 +458,58 @@ function fetchRendered(url, requireCookies, selector) {
   return run;
 }
 
+// Wait until the tab reports status "complete" (or the timeout fires).
+// Single cleanup path: removes the listener AND the timer whether the tab
+// completes, the timeout fires, or the tab dies early.
+function waitForTabComplete(tabId, timeoutMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    const listener = (tabId_, info) => {
+      if (tabId_ === tabId && info.status === 'complete') finish();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+// Smart wait instead of a fixed pause: poll the page until the text (of
+// the selected fragment, or of <body>) is non-empty and has stopped
+// changing for RENDER_STABLE_MS, with an upper cap. Fast pages finish in
+// about a second; slow ones get up to the cap instead of a false error.
+// A returned promise is awaited by executeScript.
+// Default ISOLATED world is enough to read innerText and safer than MAIN.
+function readRenderedText(tabId, selector) {
+  return chrome.scripting.executeScript({
+    target: { tabId },
+    func: (sel, maxMs, stableMs) => new Promise((resolve) => {
+      const start = Date.now();
+      let last = null;
+      let lastChange = start;
+      const read = () => {
+        const root = sel ? document.querySelector(sel) : document.body;
+        return root ? (root.innerText || '') : null;
+      };
+      const tick = () => {
+        const cur = read();
+        const now = Date.now();
+        if (cur !== last) { last = cur; lastChange = now; }
+        if (cur !== null && cur.trim() !== '' && now - lastChange >= stableMs) return resolve(cur);
+        if (now - start >= maxMs) return resolve(cur); // null = selector never appeared
+        setTimeout(tick, 200);
+      };
+      tick();
+    }),
+    args: [selector || null, selector ? RENDER_MAX_WAIT_SELECTOR_MS : RENDER_MAX_WAIT_BODY_MS, RENDER_STABLE_MS]
+  });
+}
+
 async function fetchRenderedInner(url, requireCookies, selector) {
   let tabId = null;
   let windowId = null;
@@ -482,58 +533,15 @@ async function fetchRenderedInner(url, requireCookies, selector) {
       tabId = (await chrome.tabs.create({ url, active: false })).id;
     }
 
-    // P1 (audit): single cleanup path - removes the listener AND the timer
-    // whether the tab completes, the timeout fires, or the tab dies early.
-    await new Promise((resolve) => {
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      };
-      const listener = (tabId_, info) => {
-        if (tabId_ === tabId && info.status === 'complete') finish();
-      };
-      const timer = setTimeout(finish, RENDER_LOAD_TIMEOUT_MS);
-      chrome.tabs.onUpdated.addListener(listener);
-    });
+    await waitForTabComplete(tabId, RENDER_LOAD_TIMEOUT_MS);
     // The tab may have been closed by the user or the browser meanwhile -
     // verify it still exists before injecting the script.
     try { await chrome.tabs.get(tabId); }
     catch (e) { throw new Error('Tab closed before reading'); }
 
-    // Smart wait instead of a fixed pause: poll the page until the text (of
-    // the selected fragment, or of <body>) is non-empty and has stopped
-    // changing for RENDER_STABLE_MS, with an upper cap. Fast pages finish in
-    // about a second; slow ones get up to the cap instead of a false error.
-    // A returned promise is awaited by executeScript.
     let results;
     try {
-      results = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (sel, maxMs, stableMs) => new Promise((resolve) => {
-        const start = Date.now();
-        let last = null;
-        let lastChange = start;
-        const read = () => {
-          const root = sel ? document.querySelector(sel) : document.body;
-          return root ? (root.innerText || '') : null;
-        };
-        const tick = () => {
-          const cur = read();
-          const now = Date.now();
-          if (cur !== last) { last = cur; lastChange = now; }
-          if (cur !== null && cur.trim() !== '' && now - lastChange >= stableMs) return resolve(cur);
-          if (now - start >= maxMs) return resolve(cur); // null = selector never appeared
-          setTimeout(tick, 200);
-        };
-        tick();
-      }),
-      args: [selector || null, selector ? RENDER_MAX_WAIT_SELECTOR_MS : RENDER_MAX_WAIT_BODY_MS, RENDER_STABLE_MS],
-      // Default ISOLATED world is enough to read innerText and safer than MAIN.
-      });
+      results = await readRenderedText(tabId, selector);
     } catch (scriptErr) {
       // Chrome shows its own error page (no internet, DNS, server down) and
       // REFUSES scripting in such a tab with a cryptic internal message like
@@ -545,39 +553,8 @@ async function fetchRenderedInner(url, requireCookies, selector) {
       if (/showing error page|ERR_|cannot access contents/i.test(raw)) {
         try {
           await chrome.tabs.reload(tabId);
-          await new Promise((resolve) => {
-            const timer = setTimeout(resolve, RENDER_LOAD_TIMEOUT_MS);
-            const listener = (tabId_, info) => {
-              if (tabId_ === tabId && info.status === 'complete') {
-                clearTimeout(timer);
-                chrome.tabs.onUpdated.removeListener(listener);
-                resolve();
-              }
-            };
-            chrome.tabs.onUpdated.addListener(listener);
-          });
-          results = await chrome.scripting.executeScript({
-            target: { tabId },
-            func: (sel, maxMs, stableMs) => new Promise((resolve) => {
-              const start = Date.now();
-              let last = null;
-              let lastChange = start;
-              const read = () => {
-                const root = sel ? document.querySelector(sel) : document.body;
-                return root ? (root.innerText || '') : null;
-              };
-              const tick = () => {
-                const cur = read();
-                const now = Date.now();
-                if (cur !== last) { last = cur; lastChange = now; }
-                if (cur !== null && cur.trim() !== '' && now - lastChange >= stableMs) return resolve(cur);
-                if (now - start >= maxMs) return resolve(cur);
-                setTimeout(tick, 200);
-              };
-              tick();
-            }),
-            args: [selector || null, selector ? RENDER_MAX_WAIT_SELECTOR_MS : RENDER_MAX_WAIT_BODY_MS, RENDER_STABLE_MS]
-          });
+          await waitForTabComplete(tabId, RENDER_LOAD_TIMEOUT_MS);
+          results = await readRenderedText(tabId, selector);
           const text2 = (results && results[0] && results[0].result) || '';
           if (text2.trim()) {
             return { notModified: false, text: text2, etag: null, lastModified: null };
@@ -1511,65 +1488,6 @@ async function handlePickerPicked(msg, sender) {
   return { ok: true };
 }
 
-// --- Karta zgody (grant.html) ---
-// Po przyznaniu uprawnienia karta prosi tlo o: zamkniecie tej karty,
-// poczekanie az fokus wroci do okna przegladarki i otwarcie popupu (kreator
-// wznawia sie sam - maybeRestoreWizard widzi pendingPermission + granted).
-// Otwarcie popupu z samej karty + natychmiastowe window.close() nie dzialalo:
-// zamkniecie aktywnej karty zamykalo swiezo otwarty popup. Ten sam wzorzec
-// jest w handlePickerPicked.
-async function handleGrantDone(msg, sender) {
-  const tabId = sender && sender.tab && sender.tab.id;
-
-  (async () => {
-    if (tabId != null) {
-      try { await chrome.tabs.remove(tabId); } catch (e) { /* already gone */ }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    let opened = false;
-    try {
-      if (chrome.action && typeof chrome.action.openPopup === 'function') {
-        await chrome.action.openPopup();
-        opened = true;
-      }
-    } catch (e) {
-      console.warn('[Monitor] openPopup failed:', e);
-      opened = false;
-    }
-
-    // Fallback: popup.html jako male okno - ta sama strona rozszerzenia,
-    // kreator wznawia sie w nim tak samo.
-    if (!opened) {
-      try {
-        await chrome.windows.create({
-          url: chrome.runtime.getURL('popup.html'),
-          type: 'popup',
-          width: 580,
-          height: 700
-        });
-        opened = true;
-      } catch (e) {
-        opened = false;
-      }
-    }
-
-    if (!opened) {
-      const lang = (await chrome.storage.local.get('language')).language || detectLanguage();
-      chrome.notifications.create(`pendingadd_${Date.now()}`, {
-        type: 'basic',
-        iconUrl: 'icon48.png',
-        title: lang === 'pl' ? 'Zgoda przyznana' : 'Access granted',
-        message: lang === 'pl'
-          ? 'Kliknij ikon\u0119 rozszerzenia, aby doko\u0144czy\u0107 dodawanie strony.'
-          : 'Click the extension icon to finish adding this page.'
-      });
-    }
-  })();
-
-  return { ok: true };
-}
-
 async function handlePickerCancelled() {
   // Esc: drop only the hanging pendingPicker record. The tab stays open (the
   // user may want to browse it); the picker UI removes itself.
@@ -1582,7 +1500,7 @@ async function handlePickerCancelled() {
 // Okienko zamyka popup, wiec nikt po stronie popupu nie moze go otworzyc
 // z powrotem. chrome.permissions.onAdded odpala sie w tle zaraz po kliknieciu
 // "Zezwol": oznaczamy szkic i przywracamy UI dokladnie tym samym wzorcem,
-// ktorego uzywa handleGrantDone (openPopup -> male okno popup.html ->
+// ktorego uzywa handlePickerPicked (openPopup -> male okno popup.html ->
 // powiadomienie). maybeRestoreWizard w przywroconym popupie widzi
 // pendingPermission + przyznany origin i sam przechodzi do kroku 2.
 chrome.permissions.onAdded.addListener(async (permissions) => {
@@ -1604,7 +1522,7 @@ chrome.permissions.onAdded.addListener(async (permissions) => {
   await chrome.storage.local.set({ wizardDraft: draft });
 
   // Dajemy okienku czasu na zamkniecie, a oknu przegladarki na odzyskanie
-  // fokusu (openPopup wymaga fokusu - ten sam wzorzec co handleGrantDone).
+  // fokusu (openPopup wymaga fokusu - ten sam wzorzec co handlePickerPicked).
   await new Promise((resolve) => setTimeout(resolve, 300));
 
   let opened = false;

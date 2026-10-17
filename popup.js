@@ -121,15 +121,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDragAndDrop(document.getElementById('sites-container'));
 });
 
-// Wrapper na chrome.runtime.sendMessage ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ nigdy nie rzuca; bÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂd kanaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂu
-// zwracany jest jako { ok: false, error }, ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼eby wywoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂujÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂcy mÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³gÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ go obsÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂuÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼yÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ.
-async function callBackground(msg) {
-  try {
-    return await chrome.runtime.sendMessage(msg);
-  } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
-  }
-}
 
 function flashFromResult(result) {
   const t = TRANSLATIONS[currentLang];
@@ -390,7 +381,7 @@ async function restoreBackup(e) {
     let permissionPending = false;
     if (res.origins && res.origins.length > 0) {
       try {
-        const granted = await chrome.permissions.request({ origins: res.origins });
+        const granted = await requestWithResume({ origins: res.origins });
         permissionPending = !granted;
       } catch (err) {
         permissionPending = true;
