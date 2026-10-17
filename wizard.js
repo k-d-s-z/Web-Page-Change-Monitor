@@ -270,38 +270,42 @@ async function wizardNext() {
       }
     }
 
-    // Per-site consent CANNOT be requested from this popup: the permission
-    // dialog always closes the popup (Chrome limitation), killing the flow.
-    // So the consent lives in a dedicated extension TAB (grant.html), which
-    // survives the dialog; after granting, that tab reopens the popup and
-    // the wizard continues at step 2 (see maybeRestoreWizard).
+    // Per-site consent: Chrome's OWN native dialog (it already says "read and
+    // modify your data on this site"), asked for DIRECTLY from the "Next"
+    // click - no intermediate extension tab. The dialog usually closes this
+    // popup (Chrome limitation); the draft survives in storage, and the next
+    // popup open resumes at step 2 (maybeRestoreWizard). If the popup
+    // survives, we continue right away.
     const pattern = `${urlObj.protocol}//${urlObj.host}/*`;
     let granted = false;
     try { granted = await chrome.permissions.contains({ origins: [pattern] }); }
     catch (err) { granted = false; }
 
-    if (granted) {
-      wizardGo(2);
-      await runWizardDetection();
+    if (!granted) {
+      // Mark the draft BEFORE asking: if the dialog closes this popup,
+      // maybeRestoreWizard picks the draft up on the next popup open.
+      try {
+        const data = await chrome.storage.local.get('wizardDraft');
+        const draft = data.wizardDraft;
+        if (draft && draft.url === url) {
+          draft.pendingPermission = true;
+          draft.permissionGranted = false;
+          draft.ts = Date.now();
+          await chrome.storage.local.set({ wizardDraft: draft });
+        }
+      } catch (err) { /* draft is best-effort */ }
+      try { granted = await requestWithResume({ origins: [pattern] }); }
+      catch (err) { granted = false; }
+    }
+
+    if (!granted) {
+      // Popup survived the dialog but consent was refused (or dismissed).
+      showWizardMessage(t.alertPermissionReq);
       return;
     }
 
-    // Save the draft with pendingPermission, open the consent tab, and close
-    // the popup - the tab is now the active surface.
-    try {
-      const data = await chrome.storage.local.get('wizardDraft');
-      const draft = data.wizardDraft;
-      if (draft && draft.url === url) {
-        draft.pendingPermission = true;
-        draft.permissionGranted = false;
-        draft.ts = Date.now();
-        await chrome.storage.local.set({ wizardDraft: draft });
-      }
-    } catch (err) { /* draft is best-effort */ }
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('grant.html') + '#' + encodeURIComponent(pattern)
-    });
-    window.close();
+    wizardGo(2);
+    await runWizardDetection();
     return;
   }
 
@@ -464,9 +468,9 @@ async function maybeRestoreWizard() {
   renderWizard();
 
   if (wizardState.step === 1 && d.pendingPermission) {
-    // The consent tab just granted access (or the popup was closed with the
-    // consent still pending). Granted -> continue to step 2 automatically;
-    // denied/abandoned -> stay at step 1 so "Next" re-opens the consent tab.
+    // The permission dialog closed the popup while consent was pending.
+    // Granted (the user clicked "Allow") -> continue at step 2 automatically;
+    // denied/abandoned -> stay at step 1 so "Next" re-asks.
     let pattern = '';
     try { pattern = `${new URL(d.url).protocol}//${new URL(d.url).host}/*`; } catch (err) { pattern = ''; }
     let granted = false;

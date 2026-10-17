@@ -509,7 +509,9 @@ async function fetchRenderedInner(url, requireCookies, selector) {
     // changing for RENDER_STABLE_MS, with an upper cap. Fast pages finish in
     // about a second; slow ones get up to the cap instead of a false error.
     // A returned promise is awaited by executeScript.
-    const results = await chrome.scripting.executeScript({
+    let results;
+    try {
+      results = await chrome.scripting.executeScript({
       target: { tabId },
       func: (sel, maxMs, stableMs) => new Promise((resolve) => {
         const start = Date.now();
@@ -531,7 +533,60 @@ async function fetchRenderedInner(url, requireCookies, selector) {
       }),
       args: [selector || null, selector ? RENDER_MAX_WAIT_SELECTOR_MS : RENDER_MAX_WAIT_BODY_MS, RENDER_STABLE_MS],
       // Default ISOLATED world is enough to read innerText and safer than MAIN.
-    });
+      });
+    } catch (scriptErr) {
+      // Chrome shows its own error page (no internet, DNS, server down) and
+      // REFUSES scripting in such a tab with a cryptic internal message like
+      // "Frame with ID 0 is showing error page". The site usually works fine
+      // when opened normally - a hidden minimized tab just occasionally gets
+      // a transient load failure (network blip, throttling, rate limit).
+      // Retry ONCE: reload the tab, wait for it to settle, read again.
+      const raw = String((scriptErr && scriptErr.message) || scriptErr);
+      if (/showing error page|ERR_|cannot access contents/i.test(raw)) {
+        try {
+          await chrome.tabs.reload(tabId);
+          await new Promise((resolve) => {
+            const timer = setTimeout(resolve, RENDER_LOAD_TIMEOUT_MS);
+            const listener = (tabId_, info) => {
+              if (tabId_ === tabId && info.status === 'complete') {
+                clearTimeout(timer);
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
+              }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+          });
+          results = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: (sel, maxMs, stableMs) => new Promise((resolve) => {
+              const start = Date.now();
+              let last = null;
+              let lastChange = start;
+              const read = () => {
+                const root = sel ? document.querySelector(sel) : document.body;
+                return root ? (root.innerText || '') : null;
+              };
+              const tick = () => {
+                const cur = read();
+                const now = Date.now();
+                if (cur !== last) { last = cur; lastChange = now; }
+                if (cur !== null && cur.trim() !== '' && now - lastChange >= stableMs) return resolve(cur);
+                if (now - start >= maxMs) return resolve(cur);
+                setTimeout(tick, 200);
+              };
+              tick();
+            }),
+            args: [selector || null, selector ? RENDER_MAX_WAIT_SELECTOR_MS : RENDER_MAX_WAIT_BODY_MS, RENDER_STABLE_MS]
+          });
+          const text2 = (results && results[0] && results[0].result) || '';
+          if (text2.trim()) {
+            return { notModified: false, text: text2, etag: null, lastModified: null };
+          }
+        } catch (retryErr) { /* fall through to the readable error below */ }
+        throw new Error('Site unreachable (browser error page)');
+      }
+      throw scriptErr;
+    }
     // null = selector matched nothing: an error, never an empty snapshot
     // (never commit a bogus "change").
     const text = (results && results[0] && results[0].result) || '';
@@ -1507,7 +1562,7 @@ async function handleGrantDone(msg, sender) {
         iconUrl: 'icon48.png',
         title: lang === 'pl' ? 'Zgoda przyznana' : 'Access granted',
         message: lang === 'pl'
-          ? 'Kliknij ikonę rozszerzenia, aby dokończyć dodawanie strony.'
+          ? 'Kliknij ikon\u0119 rozszerzenia, aby doko\u0144czy\u0107 dodawanie strony.'
           : 'Click the extension icon to finish adding this page.'
       });
     }
@@ -1522,3 +1577,73 @@ async function handlePickerCancelled() {
   await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
   return { ok: true };
 }
+
+// --- Wznowienie kreatora po natywnym okienku zgody (bez karty grant.html) ---
+// wizard.js prosi o uprawnienie hosta BEPOSREDNIO (wlasne okienko Chrome).
+// Okienko zamyka popup, wiec nikt po stronie popupu nie moze go otworzyc
+// z powrotem. chrome.permissions.onAdded odpala sie w tle zaraz po kliknieciu
+// "Zezwol": oznaczamy szkic i przywracamy UI dokladnie tym samym wzorcem,
+// ktorego uzywa handleGrantDone (openPopup -> male okno popup.html ->
+// powiadomienie). maybeRestoreWizard w przywroconym popupie widzi
+// pendingPermission + przyznany origin i sam przechodzi do kroku 2.
+chrome.permissions.onAdded.addListener(async (permissions) => {
+  const data = await chrome.storage.local.get(['resumeAfterPermission', 'wizardDraft']);
+  const flag = data.resumeAfterPermission || 0;
+  const draft = data.wizardDraft;
+  // Tylko swieza prosba z kreatora (requestWithResume ustawia znacznik
+  // bezposrednio przed okienkiem) - inne nadania uprawnien ignorujemy.
+  if (!flag || Date.now() - flag > 60_000) return;
+  if (!draft || !draft.url || !draft.pendingPermission) return;
+  if (Date.now() - (draft.ts || 0) > 15 * 60 * 1000) return;
+  // Tylko origin, o ktory prosil kreator (nie np. przywracanie backupu).
+  const want = originPattern(draft.url);
+  if (!want || !Array.isArray(permissions.origins) || !permissions.origins.includes(want)) return;
+
+  await chrome.storage.local.remove('resumeAfterPermission');
+  draft.permissionGranted = true;
+  draft.ts = Date.now();
+  await chrome.storage.local.set({ wizardDraft: draft });
+
+  // Dajemy okienku czasu na zamkniecie, a oknu przegladarki na odzyskanie
+  // fokusu (openPopup wymaga fokusu - ten sam wzorzec co handleGrantDone).
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  let opened = false;
+  try {
+    if (chrome.action && typeof chrome.action.openPopup === 'function') {
+      await chrome.action.openPopup();
+      opened = true;
+    }
+  } catch (e) {
+    console.warn('[Monitor] openPopup failed:', e);
+    opened = false;
+  }
+
+  // Fallback: popup.html jako male okno - ta sama strona rozszerzenia,
+  // kreator wznawia sie w nim tak samo.
+  if (!opened) {
+    try {
+      await chrome.windows.create({
+        url: chrome.runtime.getURL('popup.html'),
+        type: 'popup',
+        width: 580,
+        height: 700
+      });
+      opened = true;
+    } catch (e) {
+      opened = false;
+    }
+  }
+
+  if (!opened) {
+    const lang = (await chrome.storage.local.get('language')).language || detectLanguage();
+    chrome.notifications.create(`pendingadd_${Date.now()}`, {
+      type: 'basic',
+      iconUrl: 'icon48.png',
+      title: lang === 'pl' ? 'Zgoda przyznana' : 'Access granted',
+      message: lang === 'pl'
+        ? 'Kliknij ikon\u0119 rozszerzenia, aby doko\u0144czy\u0107 dodawanie strony.'
+        : 'Click the extension icon to finish adding this page.'
+    });
+  }
+});
