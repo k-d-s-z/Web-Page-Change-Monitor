@@ -239,6 +239,9 @@
   // hijack the gesture. preventDefault on mousedown also stops focus,
   // text-selection and drag-start on the picked fragment.
   function onMouseDown(e) {
+    // Audit #8: only trust real user events; a page can dispatch synthetic
+    // clicks/mouseups to force a "pick" without the user's knowledge.
+    if (!e.isTrusted) return;
     if (e.target === overlay || e.target === label || e.target === hintBar) return;
     e.preventDefault();
     e.stopPropagation();
@@ -247,6 +250,8 @@
   }
 
   function onMouseUp(e) {
+    // Audit #8: only real user input (synthetic mouseups could force a pick).
+    if (!e.isTrusted) return;
     if (e.target === overlay || e.target === label || e.target === hintBar) return;
     e.preventDefault();
     e.stopPropagation();
@@ -257,6 +262,9 @@
   // pointer types); never fires after a successful mouseup pick.
   function onClick(e) {
     if (picked) return;
+    // Audit #8: synthetic clicks (a page dispatching .click()) must not
+    // trigger the fallback pick either.
+    if (!e.isTrusted) return;
     e.preventDefault();
     e.stopPropagation();
     pick(isPickable(e.target) ? e.target : (isPickable(target) ? target : null));

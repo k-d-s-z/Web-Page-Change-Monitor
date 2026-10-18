@@ -148,13 +148,26 @@ const HANDLERS = {
   checkAll: () => checkAllSites(),
   importSites: (msg) => handleImportSites(msg),
   previewSite: (msg) => handlePreviewSite(msg),
-  startPicker: (msg) => handleStartPicker(msg),
+  startPicker: (msg, sender) => handleStartPicker(msg, sender),
   pickerPicked: (msg, sender) => handlePickerPicked(msg, sender),
   pickerCancelled: (msg, sender) => handlePickerCancelled(msg, sender)
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return;
+
+  // Audit #3: content scripts (the picker) share this extension id, but they
+  // run in the PAGE's context, so sender.url is the page URL, never our
+  // extension origin. Extension pages (popup, diff, wizard) always report
+  // sender.url from chrome-extension://<id>. Only the picker* actions may
+  // come from a content script; every other handler must come from an
+  // extension page.
+  const fromExtensionPage = Boolean(
+    sender.url && sender.url.startsWith(chrome.runtime.getURL(''))
+  );
+  const isPickerAction = typeof msg && msg.action === 'string' && msg.action.startsWith('picker');
+  if (isPickerAction && !(sender.tab && sender.tab.id != null)) return;
+  if (!isPickerAction && !fromExtensionPage) return;
 
   const handler = msg && Object.hasOwn(HANDLERS, msg.action) ? HANDLERS[msg.action] : null;
   if (!handler) return;
@@ -1306,10 +1319,22 @@ async function handleUndoDelete(msg) {
 
     // Basic sanitation of text fields; the record comes from this extension's
     // own storage, so full sanitizeSiteInput (which would drop snapshots) is
-    // deliberately not applied here.
+    // deliberately not applied here. Audit #7: openUrl gets the same checks
+    // as in sanitizeSiteInput - invalid or non-http(s) openUrl falls back to
+    // the (already sanitized) monitored url.
     const copy = { ...site };
     copy.name = String(copy.name || '').slice(0, 100);
     copy.url = String(copy.url || '').slice(0, 2000);
+    let openUrl = String(copy.openUrl || '').trim().slice(0, 2000);
+    if (openUrl) {
+      try {
+        const p = new URL(openUrl);
+        if (p.protocol !== 'http:' && p.protocol !== 'https:') openUrl = '';
+      } catch (e) {
+        openUrl = '';
+      }
+    }
+    copy.openUrl = openUrl || copy.url;
 
     const inserted = [...sites];
     if (index >= 0 && index <= inserted.length) inserted.splice(index, 0, copy);
@@ -1533,9 +1558,10 @@ async function handlePreviewSite(msg) {
   }
 }
 
-async function handleStartPicker(msg) {
+async function handleStartPicker(msg, sender) {
   const url = String((msg && msg.url) || '');
   const siteId = msg && msg.siteId ? String(msg.siteId) : null;
+  const wizardTabId = (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null;
 
   let parsed;
   try { parsed = new URL(url); } catch (e) { return { ok: false, error: 'invalid' }; }
@@ -1574,6 +1600,17 @@ async function handleStartPicker(msg) {
   await chrome.scripting.insertCSS({ target: { tabId }, files: ['picker.css'] });
   await chrome.scripting.executeScript({ target: { tabId }, files: ['picker.js'] });
 
+  // Zapamietaj karte pickera (zamykana po picku) + skad przyszla prosba
+  // (kreator vs formularz edycji). Flage wizard czytamy z pickerDraft TERAZ
+  // - po picku karta kreatora konsumuje draft na storage.onChanged i pozniej
+  // bylby to juz wyscig.
+  let isWizardPick = false;
+  try {
+    const draft = (await chrome.storage.local.get('pickerDraft')).pickerDraft;
+    isWizardPick = Boolean(draft && draft.wizard);
+  } catch (e) { /* noop */ }
+  await setPickerTab({ tabId, wizard: isWizardPick, wizardTabId, ts: Date.now() });
+
   const data = await chrome.storage.local.get('language');
   const lang = data.language || detectLanguage();
   try {
@@ -1591,21 +1628,63 @@ async function handleStartPicker(msg) {
   return { ok: true };
 }
 
-async function handlePickerPicked(msg, sender) {
-  const selector = String((msg && msg.selector) || '').slice(0, 200);
-  const data = await chrome.storage.local.get('pendingPicker');
-  const info = data.pendingPicker || {};
-  info.selector = selector;
-  await chrome.storage.local.set({ pendingPicker: info });
+// Przywraca UI rozszerzenia po zamknieciu popupu (pick elementu, okienko
+// zgody kreatora, zgoda z restore backupu): najpierw chrome.action.openPopup
+// (Chrome 127+; wymaga sfokusowanego okna przegladarki, wiec wywolujacy
+// odczekuje chwile przed nim), potem popup.html jako male okno (ta sama
+// strona rozszerzenia - kreator/popup wznawia sie w nim tak samo), a na
+// koncu powiadomienie proszace o klikniecie ikony.
+// Znajduje karte kreatora (popup.html?wizard=1). UWAGA: tabs.query z filtrem
+// url (match pattern) notorycznie zawodzi dla wlasnych stron chrome-extension,
+// dlatego: (1) chrome.runtime.getContexts (contextId JEST tabId karty), (2)
+// fallback tabs.query({}) + porownanie PREFIXU url. Wczesniejsze wersje
+// "nie widzialy" karty, przez co chrome.action.openPopup() otwieral popup
+// NASUWAJACY sie na zywa karte kreatora.
+async function findWizardTabId() {
+  const base = chrome.runtime.getURL('popup.html');
+  try {
+    const views = await chrome.runtime.getContexts({ contextTypes: ['TAB'] });
+    const v = (views || []).find((x) =>
+      x.documentUrl && x.documentUrl.split('#')[0].startsWith(base) && /[?&]wizard=1/.test(x.documentUrl));
+    if (v && v.contextId != null) return v.contextId;
+  } catch (e) { /* getContexts unavailable: fall through */ }
+  try {
+    const all = await chrome.tabs.query({});
+    const tab = (all || []).find((t) =>
+      (t.url || '').split('#')[0].startsWith(base) && /[?&]wizard=1/.test(t.url || ''));
+    if (tab) return tab.id;
+  } catch (e) { /* noop */ }
+  return null;
+}
 
-  if (sender && sender.tab && sender.tab.id != null) {
-    try { await chrome.tabs.remove(sender.tab.id); } catch (e) { /* already gone */ }
+// Aktywuje karte kreatora (popup.html?wizard=1), jesli istnieje. Pelna
+// migracja kreatora do karty (2026-10): po picku/zgodzie wracamy do ZYWEJ
+// karty zamiast otwierac nowe okno/popup.
+async function focusWizardTab() {
+  const tabId = await findWizardTabId();
+  if (tabId == null) return false;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (e) { /* noop */ }
+  } catch (e) { /* tab gone */ }
+  try { await chrome.tabs.update(tabId, { active: true }); } catch (e) { return false; }
+  return true;
+}
+
+// Otwiera karte kreatora: najpierw aktywuje istniejaca (nigdy drugiej obok
+// drugiej), dopiero gdy jej nie ma tworzy nowa. NIGDY nie wywoluje tu
+// chrome.action.openPopup() - popup otwierany z tla nasuwa sie na karte.
+async function ensureWizardTab() {
+  if (await focusWizardTab()) return true;
+  try {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') + '?wizard=1' });
+    return true;
+  } catch (e) {
+    return false;
   }
+}
 
-  // Bring the form back: reopen the popup (it restores the form from
-  // pendingPicker). openPopup needs a focused browser window, so wait briefly
-  // after the picker tab closes. Fallback: a notification asking to click the icon.
-  await new Promise((resolve) => setTimeout(resolve, 200));
+async function restoreExtensionUi(note) {
   let opened = false;
   try {
     if (chrome.action && typeof chrome.action.openPopup === 'function') {
@@ -1613,19 +1692,102 @@ async function handlePickerPicked(msg, sender) {
       opened = true;
     }
   } catch (e) {
+    console.warn('[Monitor] openPopup failed:', e);
     opened = false;
   }
   if (!opened) {
+    try {
+      await chrome.windows.create({
+        url: chrome.runtime.getURL('popup.html'),
+        type: 'popup',
+        width: 580,
+        height: 700
+      });
+      opened = true;
+    } catch (e) { opened = false; }
+  }
+  if (!opened && note) {
     const lang = (await chrome.storage.local.get('language')).language || detectLanguage();
     chrome.notifications.create(`pendingadd_${Date.now()}`, {
       type: 'basic',
       iconUrl: 'icon48.png',
-      title: lang === 'pl' ? 'Fragment wybrany' : 'Fragment selected',
-      message: lang === 'pl'
-        ? 'Kliknij ikon\u0119 rozszerzenia, aby doko\u0144czy\u0107 dodawanie strony.'
-        : 'Click the extension icon to finish adding this page.'
+      title: note.title[lang === 'pl' ? 'pl' : 'en'],
+      message: note.message[lang === 'pl' ? 'pl' : 'en']
     });
   }
+  return opened;
+}
+
+// Karta pickera: tBo samo ja otworzylo (handleStartPicker), wiec zna jej id.
+// Zapisujemy je w chrome.storage.session (przezywa uspienie SW; znika przy
+// restarcie przegladarki). Dzieki temu zamkniecie karty po picku NIE ZALEZY
+// od wiadomosci pickerPicked (ktora mogloby nie dotrzec) - wystarczy
+// zapis selektora do storage. Wewnetrzna zmienna to lustrzany fallback.
+let pickerTabMem = null;
+const PICKER_TAB_KEY = 'pickerTab';
+
+async function setPickerTab(info) {
+  pickerTabMem = info;
+  try { await chrome.storage.session.set({ [PICKER_TAB_KEY]: info }); } catch (e) { /* noop */ }
+}
+
+// Atomowe "przejecie" zadania: ktory kontekst pierwszy usunie rekord, ten
+// zamyka karte i routinguje powrot (wiadomosc i storage.onChanged moga
+// odpalic oba - tylko jeden ma zadzialac).
+async function claimPickerTab() {
+  let info = null;
+  try {
+    const data = await chrome.storage.session.get(PICKER_TAB_KEY);
+    info = data && data[PICKER_TAB_KEY];
+    if (info) await chrome.storage.session.remove(PICKER_TAB_KEY);
+  } catch (e) { /* session unavailable */ }
+  if (!info && pickerTabMem) { info = pickerTabMem; }
+  pickerTabMem = null;
+  return info || null;
+}
+
+// Zamkniecie karty pickera + powrot do wlasciwego UI:
+// - pick z KREATORA -> DOKLADNIE ta karta, ktora uruchomila picker
+//   (wizardTabId z wiadomosci startPicker; wyszukiwanie kart moze wskazac
+//   zla/pusta karte, jesli w oknie zostala inna karta kreatora),
+// - pick z FORMULARZA EDYCJI -> popup/okno/notyfikacja (edycja zyje w popupie).
+async function finishPickerFlow(pickerTab, senderTabId) {
+  const tabId = (senderTabId != null) ? senderTabId : (pickerTab && pickerTab.tabId);
+  if (tabId != null) {
+    try { await chrome.tabs.remove(tabId); } catch (e) { /* already gone */ }
+  }
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  if (pickerTab && pickerTab.wizard) {
+    // Punktowano: wracamy do DOKLADNIE tej karty kreatora, ktora prosila
+    // o picker. Dopiero gdy ta karta zniknela (np. uzytkownik ja zamknal),
+    // ensureWizardTab znajdzie/stworzy karte i wznowi szkic z draftu.
+    const wizardTabId = pickerTab.wizardTabId;
+    if (wizardTabId != null) {
+      try {
+        const tab = await chrome.tabs.get(wizardTabId);
+        try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (e) { /* noop */ }
+        await chrome.tabs.update(wizardTabId, { active: true });
+        return;
+      } catch (e) { /* wizard tab gone: fall through to ensureWizardTab */ }
+    }
+    await ensureWizardTab();
+  } else {
+    await restoreExtensionUi({
+      title: { pl: 'Fragment wybrany', en: 'Fragment selected' },
+      message: {
+        pl: 'Doko\u0144cz dodawanie/edycj\u0119 strony w otwartym oknie rozszerzenia.',
+        en: 'Finish editing this page in the opened extension window.'
+      }
+    });
+  }
+}
+
+async function handlePickerPicked(msg, sender) {
+  // Selektor picker zapisal juz SAM do storage (pendingPicker) - tu nie
+  // ruszamy storage (stary zapis powodowal wyscig z karta kreatora, ktora
+  // konsumuje draft na storage.onChanged). Zamykamy karte i wracamy do UI.
+  const pickerTab = await claimPickerTab();
+  await finishPickerFlow(pickerTab, sender && sender.tab ? sender.tab.id : null);
   return { ok: true };
 }
 
@@ -1633,8 +1795,24 @@ async function handlePickerCancelled() {
   // Esc: drop only the hanging pendingPicker record. The tab stays open (the
   // user may want to browse it); the picker UI removes itself.
   await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
+  pickerTabMem = null;
+  try { await chrome.storage.session.remove(PICKER_TAB_KEY); } catch (e) { /* noop */ }
   return { ok: true };
 }
+
+// Niezawodny fallback zamkniecia karty pickera: picker-2.js zapisuje selektor
+// do storage PRZED wyslaniem wiadomosci - jesli wiadomosc nie dotrze ( martwy
+// SW, uniewazniony kontekst), ten listener i tak zamknie karte i wrzuci
+// uzytkownika z powrotem do kreatora. claimPickerTab gwarantuje, ze wykona sie
+// tylko raz (wiadomosc i listener moga odpalic oba).
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area !== 'local' || !changes.pendingPicker) return;
+  const nv = changes.pendingPicker.newValue;
+  if (!nv || !nv.selector) return;
+  const pickerTab = await claimPickerTab();
+  if (!pickerTab) return; // wiadomosc pickerPicked juz to obsluzyla
+  await finishPickerFlow(pickerTab, null);
+});
 
 // --- Wznowienie kreatora po natywnym okienku zgody (bez karty grant.html) ---
 // wizard.js prosi o uprawnienie hosta BEPOSREDNIO (wlasne okienko Chrome).
@@ -1651,7 +1829,36 @@ chrome.permissions.onAdded.addListener(async (permissions) => {
   // Tylko swieza prosba z kreatora (requestWithResume ustawia znacznik
   // bezposrednio przed okienkiem) - inne nadania uprawnien ignorujemy.
   if (!flag || Date.now() - flag > 60_000) return;
-  if (!draft || !draft.url || !draft.pendingPermission) return;
+
+  // Przywracanie kopii zapasowej (popup.js restoreBackup): brak szkicu
+  // kreatora, ale jest marker pendingRestorePermission. Strony sa juz
+  // zaimportowane, wiec po przyznaniu dostepu wystarczy otworzyc popup/okno,
+  // aby uzytkownik zobaczyl przywrocona liste (bez tego zgoda zamarwiala
+  // razem z zamknietym popupem i nikt nie informowal o wyniku).
+  if (!draft || !draft.url || !draft.pendingPermission) {
+    const restore = (await chrome.storage.local.get('pendingRestorePermission')).pendingRestorePermission;
+    if (!restore || !Array.isArray(restore.origins) || !restore.origins.length) return;
+    const grantedAny = Array.isArray(permissions.origins)
+      && permissions.origins.some((o) => restore.origins.includes(o));
+    if (!grantedAny) return;
+    await chrome.storage.local.remove(['resumeAfterPermission', 'pendingRestorePermission']);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Karta restore (popup.html?restore=1) pokazuje wynik sama (zgoda po
+    // restore idzie z karty, nie z popupu); zywy popup (np. Brave) tez.
+    try {
+      const popupUrl = chrome.runtime.getURL('popup.html');
+      const views = await chrome.runtime.getContexts({ contextTypes: ['POPUP', 'TAB'] });
+      if (views.some((v) => v.documentUrl && v.documentUrl.split('#')[0].startsWith(popupUrl))) return;
+    } catch (e) { /* getContexts unavailable: fall through and restore */ }
+    await restoreExtensionUi({
+      title: { pl: 'Dost\u0119p przyznany', en: 'Access granted' },
+      message: {
+        pl: 'Kliknij ikon\u0119 rozszerzenia, aby zobaczy\u0107 przywr\u00f3cone strony.',
+        en: 'Click the extension icon to see the restored pages.'
+      }
+    });
+    return;
+  }
   if (Date.now() - (draft.ts || 0) > 15 * 60 * 1000) return;
   // Tylko origin, o ktory prosil kreator (nie np. przywracanie backupu).
   const want = originPattern(draft.url);
@@ -1666,53 +1873,25 @@ chrome.permissions.onAdded.addListener(async (permissions) => {
   // fokusu (openPopup wymaga fokusu - ten sam wzorzec co handlePickerPicked).
   await new Promise((resolve) => setTimeout(resolve, 300));
 
-  // Some browsers (e.g. Brave) do NOT close the popup when the permission
-  // dialog shows. Then the popup itself continues the wizard after
-  // permissions.request() resolves, and opening a second popup/window here
-  // would show the wizard twice (race: onAdded fires before the popup clears
-  // the resume flag). Only restore the UI if no popup.html view is alive.
+  // Pelna migracja kreatora do karty (2026-10): karta kreatora NIE zamyka
+  // sie przy okienku zgody, wiec zwykle wystarczy ja AKTYWOWAC (wizard.js
+  // sam kontynuuje po powrocie permissions.request).
+  if (await focusWizardTab()) return;
+
+  // Some browsers (e.g. Brave) do NOT close the POPUP when the permission
+  // dialog shows - the popup itself continues the wizard after
+  // permissions.request() resolves. Opening anything here would show the
+  // wizard twice. Only restore if NO popup.html view is alive (PREFIX match:
+  // karta kreatora to popup.html?wizard=1 - dokladna rownosc URL-a nigdy
+  // by nie pasowala i otwierala DRUGA karte).
   try {
     const popupUrl = chrome.runtime.getURL('popup.html');
     const views = await chrome.runtime.getContexts({ contextTypes: ['POPUP', 'TAB'] });
-    if (views.some((v) => v.documentUrl && v.documentUrl.split('#')[0] === popupUrl)) return;
+    if (views.some((v) => v.documentUrl && v.documentUrl.split('#')[0].startsWith(popupUrl))) return;
   } catch (e) { /* getContexts unavailable: fall through and restore */ }
 
-  let opened = false;
-  try {
-    if (chrome.action && typeof chrome.action.openPopup === 'function') {
-      await chrome.action.openPopup();
-      opened = true;
-    }
-  } catch (e) {
-    console.warn('[Monitor] openPopup failed:', e);
-    opened = false;
-  }
-
-  // Fallback: popup.html jako male okno - ta sama strona rozszerzenia,
-  // kreator wznawia sie w nim tak samo.
-  if (!opened) {
-    try {
-      await chrome.windows.create({
-        url: chrome.runtime.getURL('popup.html'),
-        type: 'popup',
-        width: 580,
-        height: 700
-      });
-      opened = true;
-    } catch (e) {
-      opened = false;
-    }
-  }
-
-  if (!opened) {
-    const lang = (await chrome.storage.local.get('language')).language || detectLanguage();
-    chrome.notifications.create(`pendingadd_${Date.now()}`, {
-      type: 'basic',
-      iconUrl: 'icon48.png',
-      title: lang === 'pl' ? 'Zgoda przyznana' : 'Access granted',
-      message: lang === 'pl'
-        ? 'Kliknij ikon\u0119 rozszerzenia, aby doko\u0144czy\u0107 dodawanie strony.'
-        : 'Click the extension icon to finish adding this page.'
-    });
-  }
+  // Brak zywej karty/popupu (np. karta zamknieta w trakcie okienka):
+  // nowa karta kreatora przywraca szkic (pendingPermission + przyznany
+  // origin) na starcie przez maybeRestoreWizard.
+  await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') + '?wizard=1' });
 });

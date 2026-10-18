@@ -38,6 +38,10 @@
       --warn: #FBBF24;
       --danger: #F87171;
       --scrollbar-thumb: #374151;
+      /* Wyroznienie grup kart vs samotne karty: fioletowy obrys marki
+         + subtelny gradient fioletu u gory tla grupy (dark). */
+      --group-border: rgba(139, 92, 246, 0.55);
+      --group-bg: linear-gradient(180deg, rgba(139, 92, 246, 0.08), rgba(139, 92, 246, 0.02) 45%, transparent);
     }
 
     /* Light mode: only the palette changes - every rule keeps its var() refs.
@@ -68,6 +72,9 @@
       --warn: #B45309;
       --danger: #DC2626;
       --scrollbar-thumb: #C4CAD2;
+      /* Light: pelny fiolet zlanalby sie z tlem - zostaje subtelny obrys. */
+      --group-border: rgba(131, 82, 240, 0.45);
+      --group-bg: linear-gradient(180deg, rgba(131, 82, 240, 0.06), rgba(131, 82, 240, 0.02) 45%, transparent);
     }
     /* Light mode: surfaces that were hard-coded for the dark theme. */
     [data-theme="light"] .header-bar {
@@ -84,14 +91,17 @@
     }
     html {
       overflow-x: hidden;
-      /* A classic vertical scrollbar appears once the list outgrows the popup
-         height (e.g. when the settings panel opens) and Chrome then widens the
-         popup by its width - a visible jump. Hide the bar: the page still
-         scrolls (wheel, touchpad, keyboard, drag auto-scroll) and the width
-         stays constant. */
+      /* Klasyczny pionowy pasek pojawia sie, gdy lista przerosnie popup
+         (5+ kart, otwarte menu). KAZDE jego pojawienie sie zaweza tresc
+         i przesuwa cala ramke popupu - dlatego pasek jest ukryty, a
+         przewijanie (kolko, dotyk, klawiatura) dziala jak dotychczas. */
       scrollbar-width: none;
     }
     html::-webkit-scrollbar { display: none; }
+    body {
+      scrollbar-width: none;
+    }
+    body::-webkit-scrollbar { display: none; }
     body {
       width: 540px;
       margin: 0;
@@ -233,12 +243,9 @@
     /* (see repo history for the original Polish comment) */
     .settings-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 10px;
       align-items: start;
-    }
-    .settings-col {
-      min-width: 0;
     }
     .settings-col-label {
       font-size: 11px;
@@ -438,10 +445,6 @@
     body.is-dragging * {
       cursor: grabbing !important;
     }
-    .site-card.confirming {
-      border-color: var(--brand);
-      background: var(--bg-active);
-    }
     .drag-handle {
       flex: none;
       display: flex;
@@ -592,35 +595,6 @@
       color: var(--danger);
       border-color: rgba(248, 113, 113, 0.4);
       background: var(--border);
-    }
-    .confirm-text {
-      flex: 1;
-      min-width: 0;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-    }
-    .confirm-name {
-      font-size: 12px;
-      font-weight: normal;
-      color: var(--text-2);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .btn-confirm-yes, .btn-confirm-no {
-      padding: 0 14px;
-      font-weight: 700;
-      font-size: 13px;
-      border-radius: 6px;
-    }
-    .btn-confirm-yes {
-      background: var(--brand-hover);
-      border: none;
-      color: var(--white);
-    }
-    .btn-confirm-yes:hover {
-      background: var(--brand);
     }
     .hint, .field-hint {
       font-size: 13px;
@@ -781,42 +755,6 @@
     .popover.show {
       display: block;
     }
-    /* "Advanced options" (CSS selector, date filtering, cookies) -
-       collapsible, same smooth grid-rows pattern as the settings panel. */
-    .adv-toggle {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      width: 100%;
-      padding: 7px 10px;
-      margin-bottom: 10px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text-2);
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-sizing: border-box;
-    }
-    .adv-toggle:hover {
-      color: var(--text-strong);
-      background: var(--bg-soft);
-      border-color: var(--border-strong);
-    }
-    .adv-toggle:focus-visible {
-      outline: 2px solid var(--brand);
-      outline-offset: 1px;
-    }
-    .adv-toggle svg {
-      flex: none;
-      transition: transform 0.2s ease;
-    }
-    .adv-toggle[aria-expanded="true"] svg {
-      transform: rotate(180deg);
-    }
     .adv-section {
       display: grid;
       grid-template-rows: 0fr;
@@ -894,9 +832,12 @@
     }
 
     /* Groups of pages (groups.js) */
+    /* Grupa kart odroznia sie od samotnej karty (zlewaly sie w jedno):
+       obrys w kolorze marki + fioletowe podswietlenie tla. Intensywnosc
+       steruja zmienne --group-border/--group-bg (osobno dark/light). */
     .group {
-      background: var(--bg-inset);
-      border: 1px solid var(--border);
+      background: var(--group-bg);
+      border: 1px solid var(--group-border);
       border-radius: 12px;
       padding: 8px 8px 2px;
       margin-bottom: 8px;
@@ -938,6 +879,8 @@
     .group.collapsed .group-toggle svg {
       transform: rotate(-90deg);
     }
+    /* Nazwa grupy w kolorze marki - od razu widać, ze to kontener,
+       a nie kolejna karta. */
     .group-title {
       flex: 1;
       min-width: 0;
@@ -946,7 +889,7 @@
       gap: 6px;
       font-size: 14px;
       font-weight: 700;
-      color: var(--text-strong);
+      color: var(--brand-soft, #A78BFA);
     }
     .group-name {
       overflow: hidden;
@@ -1074,6 +1017,149 @@
     .checkbox-row { display: flex; align-items: flex-start; gap: 6px; }
     .checkbox-row .checkbox-label span { white-space: normal; }
     .checkbox-row .info-btn { flex: 0 0 auto; }
+
+    /* === Karta kreatora (popup.html?wizard=1) - PELNY REDESIGN ===
+       To nie jest popup: pelne okno przegladarki wymaga wlasnej typografii,
+       hierarchii i oddechu. Klase body.wizard-tab ustawia popup.js na
+       starcie (DOMContentLoaded), gdy wykryje ?wizard=1.
+       Zalozenia:
+       - karta-kreator na wskos: tytul, kroki i nawigacja zawsze po centrum
+         ekranu (flex + align-items:center), bez 90% pustej przestrzeni,
+       - typografia "aplikacyjna": pytanie 17px, notka 14px, inputy 15px,
+       - przyciski nawigacji rozmiaru dotykalnego (min-height 44px),
+       - hierarchia akcji: Anuluj (blade, po lewej) vs Wstecz/Dalej
+         (po prawej, Dalej akcentowany fioletem),
+       - kontener krokow rozszerza sie do najdluzszego kroku (5) i pionowo
+         centruje zawartosc kroku - nic nie "przyskakuje" miedzy krokami. */
+    body.wizard-tab {
+      width: auto;
+      max-width: none;
+      min-height: 100vh;
+      padding: 32px 24px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    body.wizard-tab #view-list { display: none; }
+    body.wizard-tab #view-wizard {
+      width: 100%;
+      max-width: 680px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px 44px 32px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    }
+    body.wizard-tab #view-wizard h2 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0 0 4px;
+    }
+    /* Kroki: w trybie karty kroki sa STATYCZNE (renderWizard ukrywa
+       nieaktywne przez display:none, wiec absolutne pozycjonowanie nie
+       jest tu potrzebne) - kontener rosnie do zawartosci aktywnego kroku,
+       a puste miejsce rozklada sie nad i pod zawartoscia (flex). */
+    body.wizard-tab .wizard-steps {
+      height: auto;
+      min-height: 320px;
+      display: flex;
+      margin: 18px 0 8px;
+    }
+    body.wizard-tab .wizard-step {
+      position: static;
+      inset: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      width: 100%;
+    }
+    body.wizard-tab .wizard-question {
+      font-size: 19px;
+      font-weight: 600;
+      margin: 0 0 14px;
+      color: var(--text-strong);
+      line-height: 1.4;
+    }
+    body.wizard-tab .wizard-note {
+      font-size: 16px;
+      color: var(--text-soft);
+      margin: 0 0 18px;
+      line-height: 1.6;
+      max-width: none;
+      width: 100%;
+    }
+    /* Wieksze, bardziej "dotykalne" pola formularza w kreatorze. */
+    body.wizard-tab label {
+      font-size: 13px;
+      letter-spacing: 0.4px;
+    }
+    body.wizard-tab input,
+    body.wizard-tab select {
+      font-size: 15px;
+      padding: 12px 14px;
+      border-radius: 8px;
+    }
+    body.wizard-tab .checkbox-label {
+      font-size: 15px;
+      line-height: 1.55;
+      margin-bottom: 12px;
+    }
+    /* Nawigacja: hierarchia zamiast trzech identycznych kafelkow -
+       Anuluj wygaszony po lewej, Wstecz/Dalej po prawej, Dalej akcent. */
+    body.wizard-tab .wizard-nav {
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    body.wizard-tab .wizard-nav .btn-main,
+    body.wizard-tab .wizard-nav .btn-secondary {
+      flex: 0 1 auto;
+      min-width: 130px;
+      min-height: 44px;
+      padding: 11px 22px;
+      font-size: 15px;
+      border-radius: 8px;
+    }
+    body.wizard-tab .wizard-nav #wizard-cancel {
+      margin-right: auto;
+    }
+    body.wizard-tab .wizard-nav #wizard-back {
+      visibility: hidden; /* krok 1: wstecz nie istnieje, uklad stabilny */
+    }
+    body.wizard-tab .form-message {
+      font-size: 14px;
+    }
+    /* Przyciski wewnatrz krokow (np. "Wybierz element na stronie") - ten sam
+       rozmiar dotykalny co nawigacja. */
+    body.wizard-tab .wizard-step .btn-secondary {
+      min-height: 44px;
+      padding: 11px 16px;
+      font-size: 14px;
+      border-radius: 8px;
+    }
+    /* Widok restore (karta popup.html?restore=1) - ta sama oprawa graficzna
+       co karta kreatora (body dostaje klase wizard-tab od popup.js). */
+    .restore-hosts {
+      list-style: none;
+      margin: 0 0 14px;
+      padding: 0;
+    }
+    .restore-hosts li {
+      padding: 9px 14px;
+      margin-bottom: 6px;
+      background: var(--bg-inset);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text-soft);
+    }
+    .restore-hosts li.granted {
+      border-color: var(--ok);
+      color: var(--ok);
+    }
   </style>
 </head>
 <body>
@@ -1330,6 +1416,21 @@
       <button type="button" id="wizard-next" class="btn-main" data-i18n="wizNext">Next</button>
     </div>
   </div>
+  <!-- Widok nadania dostepu po restore backupu (karta popup.html?restore=1).
+       Popup umiera przy okienku zgody, karta NIE - dlatego zgoda po restore
+       idzie z tej karty, a nie z popupu. -->
+  <div id="view-restore" style="display: none;">
+    <h2 data-i18n="restoreAccessTitle">Grant access to restored pages</h2>
+    <p class="wizard-note" data-i18n="restoreAccessIntro">These pages were restored from a backup. Grant the extension access so it can monitor them:</p>
+    <ul id="restore-hosts" class="restore-hosts"></ul>
+    <div id="restore-message" class="form-message" role="alert"></div>
+    <div class="wizard-nav">
+      <button type="button" id="btn-restore-skip" class="btn-secondary" data-i18n="btnCancel">Cancel</button>
+      <button type="button" id="btn-restore-grant" class="btn-main" data-i18n="btnGrantAccess">Grant access</button>
+      <button type="button" id="btn-restore-done" class="btn-main" data-i18n="btnDone" style="display: none;">Done</button>
+    </div>
+  </div>
+
   <!-- Shared info popover: filled by popup.js from TRANSLATIONS[data-popover]. -->
   <div id="popover" class="popover" role="tooltip" aria-hidden="true"></div>
 

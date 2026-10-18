@@ -13,6 +13,24 @@
 
 let wizardState = null;
 
+// Kreator dziala w dedykowanej karcie (popup.html?wizard=1, pelna migracja
+// 2026-10). Po Zapisz/Anuluj karta po prostu sie zamyka; popup-lista
+// odswiezy sie sam przy nastepnym otwarciu (storage.onChanged/renderSites).
+const WIZARD_TAB_MODE = /[?&]wizard=1/.test(window.location.search);
+
+// Zamyka karte kreatora (chrome.tabs.getCurrent zwraca karte tylko w kontekscie
+// karty; w popupu zwroci undefined i zostaje window.close()).
+async function closeWizardTab() {
+  try {
+    const tab = await chrome.tabs.getCurrent();
+    if (tab && tab.id != null) {
+      await chrome.tabs.remove(tab.id);
+      return;
+    }
+  } catch (err) { /* not a tab or API unavailable */ }
+  try { window.close(); } catch (err) { /* noop */ }
+}
+
 // URL for which the user already confirmed the plain-http warning (step 1).
 let wizardHttpConfirm = null;
 
@@ -73,6 +91,11 @@ function endWizard() {
 function saveWizardDraft() {
   const s = wizardState;
   if (!s) return;
+  // PUSTY wizard (krok 1, bez URL) nie jest zapisywany: taki draft wyglada
+  // dla zamiatacza (cleanupAbandonedWizard) jak porzucony kreator i powoduje
+  // zwolnienie przyznanego originu, mimo ze karta kreatora zyje. Pusty
+  // szkic nie ma tez czego wznawiac.
+  if (!s.url) return;
   try {
     chrome.storage.local.set({
       wizardDraft: {
@@ -403,8 +426,14 @@ async function wizardNext() {
     // Saved: the origin is now in legitimate use by the monitored page.
     try { await chrome.storage.local.remove('pendingWizardOrigin'); } catch (err) { /* best-effort */ }
     endWizard();
-    await showList();
     if (res.needsBaseline && siteId) triggerCheck(siteId);
+    // Karta kreatora: zapis zakonczyl prace - zamknij karte (lista odswiezy
+    // sie w popupie przy nastepnym otwarciu).
+    if (WIZARD_TAB_MODE) {
+      await closeWizardTab();
+      return;
+    }
+    await showList();
   }
 }
 
@@ -572,6 +601,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // pendingWizardOrigin stays behind as the background's worklist and the
     // sweeper + 1-minute alarm guarantee the release anyway.
     endWizard();
+    if (WIZARD_TAB_MODE) {
+      await closeWizardTab();
+      return;
+    }
     await showList();
   });
   document.getElementById('wizard-pick').addEventListener('click', wizardPick);
@@ -598,11 +631,12 @@ document.addEventListener('DOMContentLoaded', () => {
     endWizard();
   });
 
-  // Self-restore fallback: popup.js normally calls maybeRestoreWizard(), but
-  // if its build lags behind, the wizard still recovers on its own after the
-  // permission dialog closes the popup. The timeout lets the pendingAdd and
-  // picker flows (which may already start a wizard) run first.
+  // Self-restore fallback: karta kreatora normalnie wywoluje
+  // maybeRestoreWizard() w swoim DOMContentLoaded; ten fallback to tylko
+  // bezpieczenstwo dla poprawki czesciowego wdrozenia (popup.js starszej
+  // wersji). W POPUPIE kreator juz nie zyje (pelna migracja do karty) -
+  // nie wskrzeszaj go tu.
   setTimeout(async () => {
-    if (!wizardState) await maybeRestoreWizard();
+    if (WIZARD_TAB_MODE && !wizardState) await maybeRestoreWizard();
   }, 250);
 });

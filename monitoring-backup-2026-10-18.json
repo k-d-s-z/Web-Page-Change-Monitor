@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "exportedAt": "2026-10-18T07:07:37.786Z",
+  "sites": [
+    {
+      "name": "zuzel.info",
+      "url": "https://zuzel.info/search.php?search_id=unreadposts",
+      "openUrl": "https://zuzel.info/search.php?search_id=unreadposts",
+      "group": "Różne",
+      "freqIndex": 2,
+      "freqMinutes": null,
+      "ignoreDates": false,
+      "requireCookies": true,
+      "enableNotifications": false,
+      "renderMode": "fast",
+      "selector": ""
+    },
+    {
+      "name": "WTP - Utrudnienia",
+      "url": "https://www.wtp.waw.pl/utrudnienia/",
+      "openUrl": "https://www.wtp.waw.pl/utrudnienia/",
+      "group": "Różne",
+      "freqIndex": 2,
+      "freqMinutes": null,
+      "ignoreDates": false,
+      "requireCookies": false,
+      "enableNotifications": false,
+      "renderMode": "fast",
+      "selector": ""
+    },
+    {
+      "name": "WKD - Utrudnienia",
+      "url": "https://wkd.com.pl/utrudnienia",
+      "openUrl": "https://wkd.com.pl/utrudnienia",
+      "group": "Różne",
+      "freqIndex": 3,
+      "freqMinutes": null,
+      "ignoreDates": false,
+      "requireCookies": false,
+      "enableNotifications": false,
+      "renderMode": "fast",
+      "selector": ""
+    },
+    {
+      "name": "PZBAD | Polski Związek Badmintona",
+      "url": "https://rozgrywki.pzbad.pl/classification/2/SK/9",
+      "openUrl": "https://rozgrywki.pzbad.pl/classification/2/SK/9",
+      "group": "Badminton",
+      "freqIndex": 3,
+      "freqMinutes": null,
+      "ignoreDates": false,
+      "requireCookies": true,
+      "enableNotifications": false,
+      "renderMode": "rendered",
+      "selector": ".text-danger"
+    },
+    {
+      "name": "Mistrzostwa Polski Juniorów",
+      "url": "https://pzbad.tournamentsoftware.com/tournament/18AD808F-5DA0-4C61-97A8-D446C94050B9",
+      "openUrl": "https://pzbad.tournamentsoftware.com/tournament/18AD808F-5DA0-4C61-97A8-D446C94050B9",
+      "group": "Badminton",
+      "freqIndex": 3,
+      "freqMinutes": null,
+      "ignoreDates": false,
+      "requireCookies": true,
+      "enableNotifications": false,
+      "renderMode": "rendered",
+      "selector": ".flex-container.flex-container--justify-content-space-between"
+    }
+  ]
+}
