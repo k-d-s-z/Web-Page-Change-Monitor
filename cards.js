@@ -9,9 +9,9 @@ function escapeHtml(str) {
 }
 
 // Favicona przez wbudowane API chrome://favicon (uprawnienie "favicon" +
-// web_accessible_resources w manifeÃÂcie) Ã¢ÂÂ czyta z lokalnej pamiÃÂci
-// podrÃÂcznej przeglÃÂdarki, bez ÃÂ¼adnego zapytania do serwera strony czy
-// zewnÃÂtrznego serwisu (np. Google favicon service).
+// web_accessible_resources w manifeÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂcie) ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ czyta z lokalnej pamiÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂci
+// podrÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂcznej przeglÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂdarki, bez ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼adnego zapytania do serwera strony czy
+// zewnÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂtrznego serwisu (np. Google favicon service).
 function faviconUrl(pageUrl, size = 32) {
   const url = new URL(chrome.runtime.getURL('/_favicon/'));
   url.searchParams.set('pageUrl', pageUrl);
@@ -19,8 +19,8 @@ function faviconUrl(pageUrl, size = 32) {
   return url.toString();
 }
 
-// Jednolity zestaw ikon liniowych (stroke = currentColor), dziÃÂki czemu
-// kolor ikon wynika wyÃÂÃÂcznie z CSS i nie zaleÃÂ¼y od czcionki emoji systemu.
+// Jednolity zestaw ikon liniowych (stroke = currentColor), dziÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂki czemu
+// kolor ikon wynika wyÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂcznie z CSS i nie zaleÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼y od czcionki emoji systemu.
 const SVG_OPEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
 const ICONS = {
   refresh: `${SVG_OPEN}<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
@@ -31,9 +31,9 @@ const ICONS = {
   warning: '<svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
 };
 
-// I3: czas wzglÃÂdny dla ÃÂwieÃÂ¼ych sprawdzeÃÂ (Ã¢ÂÂX min temu"), dokÃÂadna data
-// tylko dla starszych niÃÂ¼ 24 h Ã¢ÂÂ uÃÂ¼ytkownik od razu widzi, jak Ã¢ÂÂÃÂwieÃÂ¼e"
-// jest ostatnie sprawdzenie, bez porÃÂ³wnywania zegarka z etykietÃÂ.
+// I3: czas wzglÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂdny dla ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂwieÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ych sprawdzeÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ (ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂX min temu"), dokÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂadna data
+// tylko dla starszych niÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ 24 h ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ uÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ytkownik od razu widzi, jak ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂwieÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼e"
+// jest ostatnie sprawdzenie, bez porÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³wnywania zegarka z etykietÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ.
 function formatLastCheck(timestamp) {
   const locale = currentLang === 'pl' ? 'pl-PL' : 'en-US';
   const pl = currentLang === 'pl';
@@ -89,7 +89,7 @@ function buildCard(site, flash = null) {
   card.tabIndex = 0;
 
   const labelFreq = site.freqMinutes ? formatInterval(site.freqMinutes) : (t.freqLabels[site.freqIndex] || t.freqLabels[0]);
-  // U4: pauza widoczna teÃÂ¼ tekstowo, nie tylko przez opacity.
+  // U4: pauza widoczna teÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ tekstowo, nie tylko przez opacity.
   const pausedBadge = site.isPaused ? `<span class="badge-paused">${t.badgePaused}</span>` : '';
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
   const lastCheck = site.lastCheckTime ? formatLastCheck(site.lastCheckTime) : '&mdash;';
@@ -102,9 +102,9 @@ function buildCard(site, flash = null) {
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
     : '';
-  // U1: link do podglÃÂdu zmian Ã¢ÂÂ widoczny tylko przy NIEODCZYTANEJ zmianie.
-  // KlikniÃÂcie otwiera diff i czyÃÂci hasChanged (refreshSiteContent),
-  // wiÃÂc po obejrzeniu zmian przycisk znika.
+  // U1: link do podglÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂdu zmian ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ widoczny tylko przy NIEODCZYTANEJ zmianie.
+  // KlikniÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂcie otwiera diff i czyÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂci hasChanged (refreshSiteContent),
+  // wiÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂc po obejrzeniu zmian przycisk znika.
   // Heuristic flag: the page shell is large but readable text is tiny ->
   // suggest switching to rendered mode (JS draws the content).
   const suggestHtml = site.suggestRendered
@@ -183,9 +183,9 @@ function buildCard(site, flash = null) {
 
   card.addEventListener('keydown', onCardKeyDown);
 
-  // A1: Enter/Spacja na karcie (na .site-info) otwiera Ã¢ÂÂotwieranÃÂ stronÃÂ"
-  // Ã¢ÂÂ dotÃÂd obsÃÂuga klawiatury koÃÂczyÃÂa siÃÂ na strzaÃÂkach z drag.js.
-  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnÃÂtrz.
+  // A1: Enter/Spacja na karcie (na .site-info) otwiera ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂotwieranÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ stronÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ"
+  // ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ dotÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂd obsÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂuga klawiatury koÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂczyÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂa siÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ na strzaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂkach z drag.js.
+  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂtrz.
   card.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (e.target.closest('button, a, input, select, textarea')) return;
@@ -233,12 +233,26 @@ async function renderSites() {
 
   document.getElementById('site-count-badge').textContent = `(${sites.length}/${MAX_SITES})`;
 
-  // Pusty stan (U6): zamiast pustego kontenera Ã¢ÂÂ wyraÃÂ¼ne CTA.
+  // Pusty stan (U6): zamiast pustego kontenera ÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ wyraÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¼ne CTA.
   if (sites.length === 0) {
-    const emptyEl = document.createElement('div');
-    emptyEl.className = 'empty-state';
-    emptyEl.textContent = TRANSLATIONS[currentLang].emptyState;
-    container.replaceChildren(emptyEl);
+    // Empty state: duzy przycisk CTA zamiast samego tekstu - od razu
+    // widoczna sciezka "co robic", a pod nim czytelna wskazowka o menu
+    // kontekstowym (duza czcionka, pelny kontrast).
+    const t = TRANSLATIONS[currentLang];
+    const wrap = document.createElement('div');
+    wrap.className = 'empty-state';
+    const cta = document.createElement('button');
+    cta.type = 'button';
+    cta.className = 'btn-main empty-cta';
+    // \uff0b (fullwidth plus) zapisany escape'em: doslowny znak UTF-8 byl
+    // uszkodzony przy transporcie (mojibake na pustym stanie).
+    cta.textContent = `\uff0b ${t.emptyStateCta}`;
+    cta.addEventListener('click', () => { openAddForm(); });
+    const hint = document.createElement('p');
+    hint.className = 'empty-hint';
+    hint.textContent = t.emptyStateHint;
+    wrap.append(cta, hint);
+    container.replaceChildren(wrap);
     activeSiteCount = 0;
     updateRefreshAllButton();
     sendToBackground({ action: 'updateBadge' });
@@ -278,6 +292,21 @@ async function renderSites() {
     ));
   }
   container.replaceChildren(...nodes);
+
+  // PodpowiedÃÂº o grupowaniu: RAZ, gdy uzytkownik ma wlasnie 2 strony (wtedy
+  // grupowanie staje sie przydatne, a jeszcze nie ma o nim pojecia). Flaga
+  // w storage gwarantuje jednorazowosc - nie przeszkadzamy na kazdym
+  // renderze ani przy kolejnych uruchomieniach.
+  if (sites.length >= 2 && typeof showSummaryNodes === 'function') {
+    try {
+      const flag = await chrome.storage.local.get('hintGroupShown');
+      if (!flag.hintGroupShown) {
+        await chrome.storage.local.set({ hintGroupShown: true });
+        const t = TRANSLATIONS[currentLang];
+        showSummaryNodes([summaryText(t.groupHint)], 'ok', 9000);
+      }
+    } catch (err) { /* storage niedostepny: pomijamy podpowiedz */ }
+  }
 
   activeSiteCount = sites.filter((s) => !s.isPaused).length;
   updateRefreshAllButton();

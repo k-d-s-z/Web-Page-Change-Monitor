@@ -41,7 +41,9 @@
       /* Wyroznienie grup kart vs samotne karty: fioletowy obrys marki
          + subtelny gradient fioletu u gory tla grupy (dark). */
       --group-border: rgba(139, 92, 246, 0.55);
-      --group-bg: linear-gradient(180deg, rgba(139, 92, 246, 0.08), rgba(139, 92, 246, 0.02) 45%, transparent);
+      --group-bg: linear-gradient(180deg, rgba(139, 92, 246, 0.14), rgba(139, 92, 246, 0.05) 45%, transparent);
+      /* Poswiata calego popupu (dark): glow fioletu nad tytulem. */
+      --glow: rgba(139, 92, 246, 0.22);
     }
 
     /* Light mode: only the palette changes - every rule keeps its var() refs.
@@ -76,7 +78,10 @@
          wyroznik musi byc WYRAZISTY: pelniejszy fiolet na obrysie (0.75)
          + mocniejszy gradient tla + lekkie "podniesienie" cieniem. */
       --group-border: rgba(124, 58, 237, 0.75);
-      --group-bg: linear-gradient(180deg, rgba(124, 58, 237, 0.10), rgba(124, 58, 237, 0.03) 45%, transparent);
+      --group-bg: linear-gradient(180deg, rgba(124, 58, 237, 0.16), rgba(124, 58, 237, 0.06) 45%, transparent);
+      /* Poswiata popupu (light): subtelniejsza niz w dark, zeby nie
+         przytlumic bialego tla. */
+      --glow: rgba(124, 58, 237, 0.10);
     }
     /* Light mode: surfaces that were hard-coded for the dark theme. */
     [data-theme="light"] .header-bar {
@@ -114,7 +119,12 @@
       width: 540px;
       margin: 0;
       padding: 12px;
+      /* Fioletowa poswiata calego popupu: delikatny radial od gory
+         (zoladek gradientu nad tytulem) przechodzacy w --bg. Grupy kart
+         dostaja MNIEJSZA kryjaca fioletu niz to tlo - i tak zostaja
+         wyraznie ciemniejsze/ostrzejsze niz tlo popupu. */
       background-color: var(--bg);
+      background-image: radial-gradient(ellipse 120% 60% at 50% -12%, var(--glow, rgba(139, 92, 246, 0.22)), transparent 70%);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       -webkit-font-smoothing: antialiased;
