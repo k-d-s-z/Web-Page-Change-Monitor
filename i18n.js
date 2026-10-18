@@ -141,7 +141,6 @@ const TRANSLATIONS = {
     errNetwork: 'Network error',
     errUnreachable: 'Site unreachable (browser error page)',
     editRestored: 'Unsaved form restored - the permission dialog closed the popup. Check the values and save.',
-    emptyState: 'No pages monitored yet.\nClick the \uff0b button in the top right corner to start.',
     emptyStateCta: 'Monitor your first page',
     emptyStateHint: 'Tip: you can also right-click any page and choose \u201cMonitor this page\u201d from the context menu.',
     groupHint: 'Tip: drag a card onto the middle of another page to group them together.',
@@ -294,7 +293,6 @@ const TRANSLATIONS = {
     emptyStateCta: 'Monitoruj pierwsz\u0105 stron\u0119',
     emptyStateHint: 'Wskaz\u00f3wka: mo\u017cesz te\u017c klikn\u0105\u0107 dowoln\u0105 stron\u0119 prawym przyciskiem myszy i wybra\u0107 \u201eMonitoruj stron\u0119\u201d z menu kontekstowego.',
     groupHint: 'Wskaz\u00f3wka: przeci\u0105gnij kart\u0119 na \u015brodek innej strony, aby po\u0142\u0105czy\u0107 je w grup\u0119.',
-    emptyState: 'Brak monitorowanych stron.\nKliknij przycisk \uff0b w prawym g\u00f3rnym rogu, aby zacz\u0105\u0107.',
     freqLabels: ['1 min', '5 min', '10 min', '1 godz', '24 godz'],
     urlPlaceholder: 'np. https://dziennik.pl',
     namePlaceholder: 'np. Wiadomo\u015bci / Sklep'
