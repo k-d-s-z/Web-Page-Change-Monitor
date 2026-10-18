@@ -16,6 +16,12 @@ let wizardState = null;
 // URL for which the user already confirmed the plain-http warning (step 1).
 let wizardHttpConfirm = null;
 
+// True while an external flow (Chrome's permission dialog, the picker tab)
+// may close this popup ON PURPOSE: those flows must resurrect the wizard via
+// their own drafts, so the pagehide handler below must not treat such a close
+// as a cancellation.
+let wizardExternalFlow = false;
+
 // A wizard draft older than this is abandoned (user closed the popup without
 // Cancel/Save) and must NOT resurrect the wizard on every later popup open -
 // that made the extension icon behave like the "+" button.
@@ -48,6 +54,13 @@ function startWizard(prefill = null) {
   saveWizardDraft();
   renderWizard();
 }
+
+// (Historically the popup released the granted origin itself here. That was
+// fragile: a permissions.remove that silently failed during popup teardown
+// left the origin granted forever, because the marker the background sweeper
+// relies on was already gone. Release now happens ONLY in the background
+// (cleanupAbandonedWizard) - the popup just ends the wizard and lets the
+// marker pendingWizardOrigin stay as the sweeper's worklist.)
 
 function endWizard() {
   wizardState = null;
@@ -306,8 +319,18 @@ async function wizardNext() {
           await chrome.storage.local.set({ wizardDraft: draft });
         }
       } catch (err) { /* draft is best-effort */ }
+      // Record the origin BEFORE the permission dialog: the dialog usually
+      // CLOSES this popup, so any code after requestWithResume may never run
+      // (that is exactly why the marker written after the dialog never
+      // appeared and the background sweeper had nothing to clean). Written
+      // up-front, the marker survives the popup's death; if consent is denied
+      // or the page is saved, the marker is removed/ignored by the same paths
+      // as before (save removes it; a denied origin simply removes nothing).
+      try { await chrome.storage.local.set({ pendingWizardOrigin: pattern }); } catch (err) { /* best-effort */ }
+      wizardExternalFlow = true; // the dialog may close this popup - not a cancel
       try { granted = await requestWithResume({ origins: [pattern] }); }
       catch (err) { granted = false; }
+      wizardExternalFlow = false;
     }
 
     if (!granted) {
@@ -377,6 +400,8 @@ async function wizardNext() {
     }
 
     const siteId = res.siteId;
+    // Saved: the origin is now in legitimate use by the monitored page.
+    try { await chrome.storage.local.remove('pendingWizardOrigin'); } catch (err) { /* best-effort */ }
     endWizard();
     await showList();
     if (res.needsBaseline && siteId) triggerCheck(siteId);
@@ -419,6 +444,7 @@ async function wizardPick() {
     pendingPicker: { url: s.url, siteId: null },
     pickerDraft: draft
   });
+  wizardExternalFlow = true; // the picker tab takes focus and closes this popup
   const res = await callBackground({
     action: 'startPicker',
     url: s.url,
@@ -426,6 +452,7 @@ async function wizardPick() {
     requireCookies: s.requireCookies,
     rendered: s.rendered
   });
+  wizardExternalFlow = false; // popup survived after all (some browsers)
   if (!res || !res.ok) {
     await chrome.storage.local.remove(['pendingPicker', 'pickerDraft']);
     showWizardMessage(res && res.error === 'permission' ? t.pickerPermission : t.errSave);
@@ -464,7 +491,21 @@ async function maybeRestoreWizard() {
   if (!d || !d.url) return false;
 
   // Stale draft (abandoned wizard): drop it instead of hijacking the popup.
+  // Do NOT touch pendingWizardOrigin or remove the permission here - the
+  // background sweeper (cleanupAbandonedWizard) owns both: it reacts to the
+  // draft disappearing and releases the origin if no saved page uses it.
   if (Date.now() - (d.ts || 0) > WIZARD_DRAFT_MAX_AGE_MS) {
+    await chrome.storage.local.remove('wizardDraft');
+    return false;
+  }
+
+  // A draft WITHOUT a pending permission dialog means the popup was closed
+  // by clicking outside it (= cancellation without the Cancel button). The
+  // pagehide handler clears such drafts already; this is the safety net for
+  // the rare case where that storage write did not complete. Never resurrect
+  // a wizard the user already abandoned. The background sweeper handles the
+  // origin (pendingWizardOrigin stays as its worklist).
+  if (!d.pendingPermission) {
     await chrome.storage.local.remove('wizardDraft');
     return false;
   }
@@ -524,6 +565,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizard-next').addEventListener('click', wizardNext);
   document.getElementById('wizard-back').addEventListener('click', wizardBack);
   document.getElementById('wizard-cancel').addEventListener('click', async () => {
+    // Only END the wizard here (draft removed -> background cleanupAbandonedWizard
+    // fires via storage.onChanged and releases the granted origin). The popup
+    // does NOT remove the permission itself: if that call silently failed
+    // (as it sometimes does during popup teardown or a race), the marker
+    // pendingWizardOrigin stays behind as the background's worklist and the
+    // sweeper + 1-minute alarm guarantee the release anyway.
     endWizard();
     await showList();
   });
@@ -533,6 +580,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const freqIndex = parseInt(document.getElementById('wizard-freq').value, 10);
     wizardState.freqIndex = (wizardState.rendered && freqIndex === 0) ? 1 : freqIndex;
     saveWizardDraft();
+  });
+
+  // Clicking outside the popup closes it with NO cancel event. Treat that
+  // close as cancellation: release the freshly granted origin (best-effort;
+  // the background sweeper is the safety net) and drop the draft so the
+  // wizard never resurrects on its own. While wizardExternalFlow is set
+  // (permission dialog / picker tab), the close is expected and the
+  // dedicated drafts (wizardDraft.pendingPermission / pickerDraft) take over.
+  window.addEventListener('pagehide', () => {
+    if (!wizardState || wizardExternalFlow) return;
+    // Only the DRAFT removal matters here (a single quick storage write with
+    // a real chance to commit while the popup is torn down). The granted
+    // origin is NOT touched: the background sweeper sees the draft vanish
+    // (storage.onChanged -> cleanupAbandonedWizard) and releases the
+    // permission; if even this write dies, the 1-minute alarm catches it.
+    endWizard();
   });
 
   // Self-restore fallback: popup.js normally calls maybeRestoreWizard(), but

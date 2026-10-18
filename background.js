@@ -11,6 +11,7 @@ const RENDER_GRACE_MS = 2500;
 const RENDER_MAX_WAIT_SELECTOR_MS = 10000; // wait for the selected element to appear
 const RENDER_MAX_WAIT_BODY_MS = 5000;     // whole page: cap for pages whose text never settles
 const RENDER_STABLE_MS = 600;             // text unchanged this long = rendering finished
+const WIZARD_DRAFT_MAX_AGE_MS = 15 * 60 * 1000; // must match wizard.js
 
 let storageQueue = Promise.resolve();
 function withStorageLock(task) {
@@ -24,19 +25,27 @@ const inFlight = new Set();
 chrome.runtime.onInstalled.addListener(async () => {
   await setupAlarms();
   await updateContextMenu();
+  await cleanupAbandonedWizard();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   inFlight.clear();
   await setupAlarms();
   await updateContextMenu();
+  await cleanupAbandonedWizard();
 });
 
 // Od\u015bwie\u017camy tytu\u0142 pozycji menu przy zmianie j\u0119zyka w popupie, \u017ceby by\u0142
 // aktualny nawet bez ponownego uruchamiania rozszerzenia.
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.language) {
+  if (area !== 'local') return;
+  if (changes.language) {
     updateContextMenu();
+  }
+  // The wizard draft appeared/disappeared (or its origin marker changed):
+  // check whether a wizard-granted host permission is now orphaned.
+  if (changes.wizardDraft || changes.pendingWizardOrigin) {
+    cleanupAbandonedWizard();
   }
 });
 
@@ -202,10 +211,21 @@ async function setupAlarms() {
     });
   }
 
+  // Wizard origin sweeper (see cleanupAbandonedWizard): periodic safety net
+  // for the case where the popup died without firing pagehide cleanup and
+  // is never opened again.
+  if (!existing.some((a) => a.name === 'wizard_cleanup')) {
+    await chrome.alarms.create('wizard_cleanup', { periodInMinutes: 1, delayInMinutes: 1 });
+  }
+
   await updateBadge();
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'wizard_cleanup') {
+    await cleanupAbandonedWizard();
+    return;
+  }
   if (alarm.name.startsWith('check_')) {
     const siteId = alarm.name.replace('check_', '');
     const result = await checkSite(siteId);
@@ -243,11 +263,101 @@ function detectLanguage() {
   }
 }
 
+// --- Linear-time HTML stripping -------------------------------------------
+// The previous regexes (<!--[\s\S]*?-->, <(script|style)...[\s\S]*?</\1>,
+// <[^>]+>) are QUADRATIC on markup with many unclosed tags: a hostile or broken
+// page of ~0.6 MB of "<!--" froze the service worker for ~30 s. These helpers
+// give byte-for-byte the same output on every input, in linear time: they cache
+// the next ">" and remember that a closing marker is missing (once a search for
+// it fails, no later start can succeed either).
+
+// Removes <!-- ... --> (an unclosed "<!--" is left untouched, as before).
+function removeComments(html) {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const start = html.indexOf('<!--', i);
+    if (start === -1) break;
+    const end = html.indexOf('-->', start + 4);
+    if (end === -1) break; // no later comment can close either
+    out += html.slice(i, start);
+    i = end + 3;
+  }
+  return out + html.slice(i);
+}
+
+// Removes <script|style|noscript ...> ... </same> blocks (case-insensitive).
+function removeRawTextBlocks(html) {
+  const re = /<(script|style|noscript)/gi;
+  const missingEnd = new Set();
+  let out = '';
+  let i = 0;
+  let gt = -2; // cached position of the next ">"
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const name = m[1].toLowerCase();
+    if (missingEnd.has(name)) continue;
+    const afterName = m.index + m[0].length;
+    if (gt < afterName) {
+      gt = html.indexOf('>', afterName);
+      if (gt === -1) break; // no ">" left: no later start can match
+    }
+    const endRe = new RegExp('</' + name + '>', 'gi');
+    endRe.lastIndex = gt + 1;
+    const e = endRe.exec(html);
+    if (!e) { missingEnd.add(name); continue; }
+    out += html.slice(i, m.index);
+    i = e.index + e[0].length;
+    re.lastIndex = i;
+  }
+  return out + html.slice(i);
+}
+
+// Replaces every <...> (at least one char inside) with `repl`.
+function replaceAllTags(html, repl) {
+  let out = '';
+  let i = 0;
+  let p = 0;
+  let gt = -2;
+  for (;;) {
+    const lt = html.indexOf('<', p);
+    if (lt === -1) break;
+    if (gt < lt + 1) {
+      gt = html.indexOf('>', lt + 1);
+      if (gt === -1) break;
+    }
+    if (gt === lt + 1) { p = lt + 1; continue; } // "<>" is not a tag
+    out += html.slice(i, lt) + repl;
+    i = gt + 1;
+    p = i;
+  }
+  return out + html.slice(i);
+}
+
+// Replaces every opening block tag (<p ...>, <div ...> ...) with `repl`.
+function replaceBlockTags(html, repl) {
+  const re = new RegExp(`<(${SNAPSHOT_BLOCK_TAGS})`, 'gi');
+  let out = '';
+  let i = 0;
+  let gt = -2;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    if (gt < m.index + 1) {
+      gt = html.indexOf('>', m.index + 1);
+      if (gt === -1) break;
+    }
+    out += html.slice(i, m.index) + repl;
+    i = gt + 1;
+    re.lastIndex = i;
+  }
+  return out + html.slice(i);
+}
+
 function cleanHtmlSimple(htmlText) {
   if (!htmlText) return '';
-  let cleaned = htmlText.replace(/<!--[\s\S]*?-->/g, '');
-  cleaned = cleaned.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '');
-  cleaned = cleaned.replace(/<[^>]+>/g, ' ');
+  let cleaned = removeComments(htmlText);
+  cleaned = removeRawTextBlocks(cleaned);
+  cleaned = replaceAllTags(cleaned, ' ');
   cleaned = cleaned.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
   return cleaned.replace(/\s+/g, ' ').trim();
 }
@@ -277,10 +387,10 @@ function cleanHtmlStructured(htmlText) {
       // niepoprawny JSON \u2014 traktuj jak HTML
     }
   }
-  let cleaned = htmlText.replace(/<!--[\s\S]*?-->/g, '');
-  cleaned = cleaned.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, '');
-  cleaned = cleaned.replace(new RegExp(`<(${SNAPSHOT_BLOCK_TAGS})[^>]*>`, 'gi'), '\n');
-  cleaned = cleaned.replace(/<[^>]+>/g, ' ');
+  let cleaned = removeComments(htmlText);
+  cleaned = removeRawTextBlocks(cleaned);
+  cleaned = replaceBlockTags(cleaned, '\n');
+  cleaned = replaceAllTags(cleaned, ' ');
   cleaned = cleaned.replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
   return cleaned
     .split('\n')
@@ -860,6 +970,37 @@ async function releaseUnusedOrigins(urls) {
       console.warn('[Monitor] Could not remove permission', pattern, e);
     }
   }
+}
+
+// --- Wizard origin sweeper ------------------------------------------------
+// A host permission granted by the add-page wizard must not outlive the
+// wizard itself. The popup releases it on Cancel and on the pagehide close
+// ("click outside"), but neither is guaranteed to complete while the popup
+// is being torn down, and the popup may never be opened again. wizard.js
+// therefore records every NEW grant in `pendingWizardOrigin`; whenever the
+// wizard draft disappears (or is stale) and no saved page uses the origin,
+// the background releases it. Triggered by storage.onChanged and a 1-minute
+// safety-net alarm.
+async function cleanupAbandonedWizard() {
+  const data = await chrome.storage.local.get(['pendingWizardOrigin', 'wizardDraft', 'sites']);
+  const origin = data.pendingWizardOrigin;
+  if (!origin) return;
+
+  const draft = data.wizardDraft;
+  const wizardAlive = Boolean(draft && draft.url && Date.now() - (draft.ts || 0) <= WIZARD_DRAFT_MAX_AGE_MS);
+  if (wizardAlive) return;
+
+  const inUse = (data.sites || []).some((s) => originPattern(s.url) === origin);
+  if (!inUse) {
+    try {
+      const removed = await chrome.permissions.remove({ origins: [origin] });
+      const still = await chrome.permissions.contains({ origins: [origin] });
+      console.info('[Monitor] wizard abandoned - released origin:', origin, 'removed =', removed, 'still granted =', still);
+    } catch (e) {
+      console.warn('[Monitor] Could not release wizard origin', origin, e);
+    }
+  }
+  await chrome.storage.local.remove('pendingWizardOrigin');
 }
 
 function newSiteId() {
@@ -1524,6 +1665,17 @@ chrome.permissions.onAdded.addListener(async (permissions) => {
   // Dajemy okienku czasu na zamkniecie, a oknu przegladarki na odzyskanie
   // fokusu (openPopup wymaga fokusu - ten sam wzorzec co handlePickerPicked).
   await new Promise((resolve) => setTimeout(resolve, 300));
+
+  // Some browsers (e.g. Brave) do NOT close the popup when the permission
+  // dialog shows. Then the popup itself continues the wizard after
+  // permissions.request() resolves, and opening a second popup/window here
+  // would show the wizard twice (race: onAdded fires before the popup clears
+  // the resume flag). Only restore the UI if no popup.html view is alive.
+  try {
+    const popupUrl = chrome.runtime.getURL('popup.html');
+    const views = await chrome.runtime.getContexts({ contextTypes: ['POPUP', 'TAB'] });
+    if (views.some((v) => v.documentUrl && v.documentUrl.split('#')[0] === popupUrl)) return;
+  } catch (e) { /* getContexts unavailable: fall through and restore */ }
 
   let opened = false;
   try {
