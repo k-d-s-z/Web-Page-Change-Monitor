@@ -142,6 +142,8 @@ const TRANSLATIONS = {
     errUnreachable: 'Site unreachable (browser error page)',
     editRestored: 'Unsaved form restored - the permission dialog closed the popup. Check the values and save.',
     emptyState: 'No pages monitored yet.\nClick the \uff0b button in the top right corner to start.',
+    emptyStateCta: 'Monitor your first page',
+    emptyStateHint: 'Tip: you can also right-click any page and choose \u201cMonitor this page\u201d from the context menu.',
     freqLabels: ['1 min', '5 min', '10 min', '1 hr', '24 hrs'],
     urlPlaceholder: 'e.g. https://news-site.com',
     namePlaceholder: 'e.g. News / Store'
@@ -288,6 +290,8 @@ const TRANSLATIONS = {
     errNetwork: 'B\u0142\u0105d sieci',
     errUnreachable: 'Strona nieosi\u0105galna (strona b\u0142\u0119du przegl\u0105darki)',
     editRestored: 'Przywr\u00f3cono niezapisany formularz - okno zgody zamkn\u0119\u0142o popup. Sprawd\u017a warto\u015bci i zapisz.',
+    emptyStateCta: 'Monitoruj pierwszą stronę',
+    emptyStateHint: 'Wskazówka: możesz też kliknąć dowolną stronę prawym przyciskiem myszy i wybrać „Monitoruj stronę" z menu kontekstowego.',
     emptyState: 'Brak monitorowanych stron.\nKliknij przycisk \uff0b w prawym g\u00f3rnym rogu, aby zacz\u0105\u0107.',
     freqLabels: ['1 min', '5 min', '10 min', '1 godz', '24 godz'],
     urlPlaceholder: 'np. https://dziennik.pl',

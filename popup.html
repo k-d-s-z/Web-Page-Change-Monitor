@@ -72,13 +72,21 @@
       --warn: #B45309;
       --danger: #DC2626;
       --scrollbar-thumb: #C4CAD2;
-      /* Light: pelny fiolet zlanalby sie z tlem - zostaje subtelny obrys. */
-      --group-border: rgba(131, 82, 240, 0.45);
-      --group-bg: linear-gradient(180deg, rgba(131, 82, 240, 0.06), rgba(131, 82, 240, 0.02) 45%, transparent);
+      /* Light: biale karty na jasnym tle niemal zlewaja sie z grupa, wiec
+         wyroznik musi byc WYRAZISTY: pelniejszy fiolet na obrysie (0.75)
+         + mocniejszy gradient tla + lekkie "podniesienie" cieniem. */
+      --group-border: rgba(124, 58, 237, 0.75);
+      --group-bg: linear-gradient(180deg, rgba(124, 58, 237, 0.10), rgba(124, 58, 237, 0.03) 45%, transparent);
     }
     /* Light mode: surfaces that were hard-coded for the dark theme. */
     [data-theme="light"] .header-bar {
       border-bottom-color: var(--border);
+    }
+    /* Light: sama fioletowa ramka ginie na jasnym tle - grupa dostaje tez
+       delikatny cien (efekt "podniesionej" tacy), a karty w srodku (biale)
+       dobrze odcinaja sie od fioletowego odcienia tla grupy. */
+    [data-theme="light"] .group {
+      box-shadow: 0 1px 3px rgba(31, 35, 40, 0.10), 0 4px 12px rgba(124, 58, 237, 0.08);
     }
     [data-theme="light"] .list-footer {
       background: rgba(246, 247, 249, 0.95);
@@ -629,10 +637,29 @@
     }
     .empty-state {
       text-align: center;
-      padding: 24px 8px;
+      padding: 28px 8px 20px;
       color: var(--text-2);
       font-size: 13px;
       line-height: 1.6;
+    }
+    /* Pusty stan: duzy fioletowy CTA (to sama klasa bazowa .btn-main,
+       wiec pelny motyw i stany hover dziedzicza automatycznie) + czytelna
+       wskazowka o menu kontekstowym. */
+    .empty-state .empty-cta {
+      width: auto;
+      padding: 12px 22px;
+      font-size: 15px;
+      border-radius: 10px;
+      margin: 0 auto 14px;
+    }
+    .empty-state .empty-hint {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-3);
+      line-height: 1.6;
+      max-width: 42ch;
+      margin-left: auto;
+      margin-right: auto;
     }
     .form-group {
       margin-bottom: 10px;
@@ -706,12 +733,14 @@
     .label-row label {
       margin-bottom: 0;
     }
+    /* "?" zamiast "i": wiekszy cel dotykowy i czytelnosc (18px bylo za
+       malo widoczne, ikona 17px wewnatrz 22px przycisku). */
     .info-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       flex: none;
       padding: 0;
       background: transparent;
@@ -879,7 +908,7 @@
     .group.collapsed .group-toggle svg {
       transform: rotate(-90deg);
     }
-    /* Nazwa grupy w kolorze marki - od razu widać, ze to kontener,
+    /* Nazwa grupy w kolorze marki - od razu wida , ze to kontener,
        a nie kolejna karta. */
     .group-title {
       flex: 1;
@@ -1045,11 +1074,19 @@
     body.wizard-tab #view-wizard {
       width: 100%;
       max-width: 680px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
+      /* Ta sama fioletowa "poswiata" co grupy kart (--group-bg/--group-border):
+         gradient fioletu naklada sie NA tlo karty, obrys w kolorze marki,
+         plus miekki fioletowy glow. Zmienne sa osobno dla dark/light, wiec
+         oba motywy dostaja wlasciwa intensywnosc. */
+      background-color: var(--bg-card);
+      background-image: var(--group-bg);
+      border: 1px solid var(--group-border);
       border-radius: 16px;
       padding: 36px 44px 32px;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(139, 92, 246, 0.12), 0 8px 32px rgba(139, 92, 246, 0.18);
+    }
+    [data-theme="light"] body.wizard-tab #view-wizard {
+      box-shadow: 0 4px 16px rgba(31, 35, 40, 0.10), 0 8px 28px rgba(124, 58, 237, 0.15);
     }
     body.wizard-tab #view-wizard h2 {
       font-size: 24px;
@@ -1141,7 +1178,21 @@
       border-radius: 8px;
     }
     /* Widok restore (karta popup.html?restore=1) - ta sama oprawa graficzna
-       co karta kreatora (body dostaje klase wizard-tab od popup.js). */
+       co karta kreatora (body dostaje klase wizard-tab od popup.js):
+       fioletowa poswiata jak grupy kart (--group-bg/--group-border). */
+    body.wizard-tab #view-restore {
+      width: 100%;
+      max-width: 680px;
+      background-color: var(--bg-card);
+      background-image: var(--group-bg);
+      border: 1px solid var(--group-border);
+      border-radius: 16px;
+      padding: 36px 44px 32px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(139, 92, 246, 0.12), 0 8px 32px rgba(139, 92, 246, 0.18);
+    }
+    [data-theme="light"] body.wizard-tab #view-restore {
+      box-shadow: 0 4px 16px rgba(31, 35, 40, 0.10), 0 8px 28px rgba(124, 58, 237, 0.15);
+    }
     .restore-hosts {
       list-style: none;
       margin: 0 0 14px;
@@ -1245,7 +1296,7 @@
       <div class="label-row">
         <label data-i18n="lblSiteUrl">URL Address</label>
         <button type="button" class="info-btn" data-popover="hintJs" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
         </button>
       </div>
       <input type="text" id="site-url" placeholder="https://...">
@@ -1257,7 +1308,7 @@
         <span data-i18n="chkRendered">Rendered page mode (JS-rendered sites)</span>
       </label>
       <button type="button" class="info-btn" data-popover="hintRendered" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
       </button>
     </div>
 
@@ -1267,7 +1318,7 @@
             <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
           </label>
           <button type="button" class="info-btn" data-popover="hintCookies" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           </button>
         </div>
     <div id="advanced-section" class="adv-section open">
@@ -1276,7 +1327,7 @@
           <div class="label-row">
             <label data-i18n="lblSelector">Watch only part of the page (CSS selector)</label>
             <button type="button" class="info-btn" data-popover="hintSelector" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
             </button>
           </div>
           <input type="text" id="site-selector" placeholder="#content, .results, main">
@@ -1309,7 +1360,7 @@
         <span data-i18n="chkNotifications">Enable desktop notifications</span>
       </label>
       <button type="button" class="info-btn" data-popover="hintNotifications" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
       </button>
     </div>
 
@@ -1319,7 +1370,7 @@
             <span data-i18n="chkIgnoreDates">Ignore date and time changes</span>
           </label>
           <button type="button" class="info-btn" data-popover="hintIgnoreDates" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           </button>
         </div>
 
