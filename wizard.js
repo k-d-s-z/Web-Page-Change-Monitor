@@ -13,6 +13,9 @@
 
 let wizardState = null;
 
+// URL for which the user already confirmed the plain-http warning (step 1).
+let wizardHttpConfirm = null;
+
 // A wizard draft older than this is abandoned (user closed the popup without
 // Cancel/Save) and must NOT resurrect the wizard on every later popup open -
 // that made the extension icon behave like the "+" button.
@@ -24,6 +27,7 @@ const WIZARD_PLACEHOLDERS = {
 };
 
 function startWizard(prefill = null) {
+  wizardHttpConfirm = null;
   wizardState = {
     step: 1,
     url: (prefill && prefill.url) || '',
@@ -270,6 +274,14 @@ async function wizardNext() {
       }
     }
 
+    // Plain http:// is unencrypted: warn once (same two-click pattern as the
+    // edit form) before asking for any permission.
+    if (urlObj.protocol === 'http:' && wizardHttpConfirm !== url) {
+      wizardHttpConfirm = url;
+      showWizardMessage(t.warnHttpWizard, 'warn');
+      return;
+    }
+
     // Per-site consent: Chrome's OWN native dialog (it already says "read and
     // modify your data on this site"), asked for DIRECTLY from the "Next"
     // click - no intermediate extension tab. The dialog usually closes this
@@ -322,6 +334,12 @@ async function wizardNext() {
 
   if (s.step === 4) {
     s.requireCookies = document.getElementById('wizard-cookies').checked || s.rendered;
+    // Session cookies over plain http:// are refused by the background too;
+    // say so here instead of failing at the very last step.
+    if (s.requireCookies && /^http:/i.test(s.url)) {
+      showWizardMessage(t.errHttpCookiesBlocked);
+      return;
+    }
     wizardGo(5);
     // Cookies/selector are known only now - verify the render mode once more.
     maybeFinalRenderCheck();
@@ -352,7 +370,9 @@ async function wizardNext() {
     });
 
     if (!res || !res.ok) {
-      showWizardMessage(saveErrorMessage(res));
+      showWizardMessage(res && res.error === 'invalid' && /^http:/i.test(s.url)
+        ? t.errHttpCookiesBlocked
+        : saveErrorMessage(res));
       return;
     }
 
