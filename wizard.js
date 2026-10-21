@@ -149,6 +149,17 @@ function renderWizard() {
 
   document.getElementById('wizard-back').style.visibility = s.step === 1 ? 'hidden' : 'visible';
   document.getElementById('wizard-next').textContent = s.step === 5 ? t.btnSave : t.wizNext;
+  // Audyt UX#6: wskaźnik "Krok X z 5 · nazwa kroku" pod tytułem kreatora.
+  const indicator = document.getElementById('wizard-step-indicator');
+  if (indicator) {
+    const names = {
+      1: t.wizStepName1, 2: t.wizStepName2, 3: t.wizStepName3,
+      4: t.wizStepName4, 5: t.wizStepName5
+    };
+    const stepOf = (t.wizStepOf || '').replace('{n}', String(s.step));
+    const stepName = names[s.step] || '';
+    indicator.textContent = stepName ? `${stepOf} \u00b7 ${stepName}` : stepOf;
+  }
   clearWizardMessage();
 
   if (s.step === 1) {
@@ -178,6 +189,17 @@ function renderWizard() {
     const sel = document.getElementById('wizard-selector');
     if (document.activeElement !== sel) sel.value = s.selector;
     sel.placeholder = ph.selector;
+    // Audyt UX#2/3: reczny selektor to opcja "zaawansowane" - panel
+    // rozwijamy automatycznie tylko, gdy juz jest w nim wartosc
+    // (kreator wznowiony po pickerze / z draftu), zeby jej nie ukryc.
+    const panel = document.getElementById('wizard-adv');
+    const toggle = document.getElementById('wizard-adv-toggle');
+    if (panel && toggle) {
+      const open = Boolean(s.selector);
+      panel.classList.toggle('open', open);
+      panel.style.display = open ? 'block' : 'none';
+      toggle.setAttribute('aria-expanded', String(open));
+    }
   }
 
   if (s.step === 4) {
@@ -649,6 +671,19 @@ document.addEventListener('DOMContentLoaded', () => {
     await showList();
   });
   document.getElementById('wizard-pick').addEventListener('click', wizardPick);
+  // Audyt UX#2/3: selektor CSS wpisany recznie - opcja "zaawansowane",
+  // rozwijana lacznikiem pod podpowiedzia (glowna sciezka to picker).
+  const advToggle = document.getElementById('wizard-adv-toggle');
+  const advPanel = document.getElementById('wizard-adv');
+  if (advToggle && advPanel) {
+    advToggle.addEventListener('click', () => {
+      const open = !advPanel.classList.contains('open');
+      advPanel.classList.toggle('open', open);
+      advPanel.style.display = open ? 'block' : 'none';
+      advToggle.setAttribute('aria-expanded', String(open));
+      if (open) document.getElementById('wizard-selector').focus();
+    });
+  }
   document.getElementById('wizard-freq').addEventListener('change', () => {
     if (!wizardState) return;
     const value = document.getElementById('wizard-freq').value;

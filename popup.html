@@ -625,7 +625,7 @@
     .badge-changed {
       background: var(--warn);
       color: #1F1F28; /* dark text: white on the amber dark-theme --warn is unreadable */
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 700;
       padding: 2px 6px;
       border-radius: 4px;
@@ -637,7 +637,7 @@
     .badge-paused {
       background: var(--scrollbar-thumb);
       color: var(--text-soft);
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 700;
       padding: 2px 6px;
       border-radius: 4px;
@@ -983,6 +983,69 @@
       display: block;
     }
 
+    /* Trwałe podpowiedzi pod polami formularza (audyt: komentarze pod
+       ikoną "?" zastąpione czytelnym tekstem - karta edycji ma na nie
+       miejsce, a popupowa plakietka 9 px była nieczytelna). */
+    .field-hint {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.5;
+      margin: 6px 0 0;
+    }
+    /* Wyraźne linie oddzielające sekcje formularza edycji (audyt:
+       bez nich formularz był nieczytelną ścianą tekstu). */
+    .form-sep {
+      border: none;
+      height: 1px;
+      /* Audyt: var(--border) ma kontrast 1,26:1 na tle karty - linia
+         była niewidoczna. Wyraźny, ale subtelny kolor per motyw. */
+      background: rgba(255, 255, 255, 0.18);
+      margin: 18px 0;
+    }
+    [data-theme="light"] .form-sep {
+      background: rgba(31, 35, 40, 0.25);
+    }
+    /* Zapisz + Anuluj w jednym rzędzie (audyt: trzy pełnej szerokości
+       przyciski w pionie niepotrzebnie wydłużały formularz). */
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .form-actions .btn-main {
+      flex: 1;
+      width: auto;
+      margin-bottom: 0;
+    }
+    /* Kreator, krok 3: główna ścieżka = duży przycisk wyboru elementu;
+       ręczny selektor CSS schowany pod łącznikiem "zaawansowane". */
+    .btn-pick-primary {
+      margin-bottom: 10px;
+    }
+    .adv-toggle {
+      display: inline-block;
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      margin-top: 2px;
+    }
+    .adv-toggle:hover {
+      color: var(--brand-hover);
+    }
+    .adv-panel {
+      display: none;
+      margin-top: 10px;
+    }
+    .adv-panel.open {
+      display: block;
+    }
+
     /* Visually hidden but available to screen readers (a11y live region). */
     .sr-only {
       position: absolute;
@@ -1024,7 +1087,7 @@
     .badge-suggest {
       background: var(--warn);
       color: #1F1F28;
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 700;
       padding: 2px 6px;
       border-radius: 4px;
@@ -1042,6 +1105,13 @@
     .wizard-steps { position: relative; height: 220px; overflow-y: auto; margin-bottom: 4px; }
     .wizard-step { position: absolute; inset: 0; margin-bottom: 0; }
     .wizard-question { font-size: 14px; font-weight: 600; margin: 2px 0 10px; color: var(--text-strong); }
+    /* Audyt UX#6: wskaźnik kroku pod tytułem kreatora - "Krok X z 5 · nazwa
+       kroku" zamiast samego "Dodaj stronę" na każdym ekranie. */
+    .wizard-step-indicator {
+      font-size: 13px;
+      color: var(--text-2);
+      margin: 0 0 14px;
+    }
     .wizard-note { font-size: 12px; color: var(--text-2); margin: 0 0 10px; line-height: 1.45; }
     /* Jeden wiersz: Anuluj / Wstecz / Dalej - rowne szerokosci. Wstecz na
        kroku 1 jest tylko wygaszany (visibility), nie usuwany z ukladu, wiec
@@ -1102,6 +1172,11 @@
       font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.01em;
+      margin: 0 0 4px;
+    }
+    /* Wskaźnik kroku: w karcie większy (audyt: minimum 11 px wszędzie). */
+    body.wizard-tab .wizard-step-indicator {
+      font-size: 14px;
       margin: 0 0 4px;
     }
     /* Kroki: w trybie karty kroki sa STATYCZNE (renderWizard ukrywa
@@ -1186,6 +1261,94 @@
       padding: 11px 16px;
       font-size: 14px;
       border-radius: 8px;
+    }
+    /* === Karta edycji (popup.html?edit=1) ===
+       Audyt UX#2: formularz edycji (652 px) nie mieścił się w limicie
+       wysokości popupu (600 px), więc edycja przeniesiona do karty -
+       dokładnie jak kreator. body dostaje tę samą klasę wizard-tab
+       ("pełne okno"); widok #view-form ma własne reguły: ta sama oprawa
+       co kreator + trwałe, duże podpowiedzi pod polami (ikony "?"
+       z popoverami zniknęły) + linie oddzielające sekcje. */
+    body.wizard-tab #view-form {
+      width: 100%;
+      max-width: 680px;
+      background-color: var(--bg-card);
+      background-image: var(--group-bg);
+      border: 1px solid var(--group-border);
+      border-radius: 16px;
+      padding: 36px 44px 32px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(139, 92, 246, 0.12), 0 8px 32px rgba(139, 92, 246, 0.18);
+    }
+    [data-theme="light"] body.wizard-tab #view-form {
+      box-shadow: 0 4px 16px rgba(31, 35, 40, 0.10), 0 8px 28px rgba(124, 58, 237, 0.15);
+    }
+    body.wizard-tab #view-form h2 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0 0 18px;
+    }
+    body.wizard-tab #view-form label {
+      font-size: 13px;
+      letter-spacing: 0.4px;
+    }
+    body.wizard-tab #view-form input,
+    body.wizard-tab #view-form select {
+      font-size: 15px;
+      padding: 12px 14px;
+      border-radius: 8px;
+    }
+    body.wizard-tab #view-form .checkbox-label {
+      font-size: 15px;
+      line-height: 1.55;
+      margin-bottom: 4px;
+    }
+    body.wizard-tab #view-form .field-hint {
+      font-size: 16px;
+      color: var(--text-soft);
+      line-height: 1.6;
+      margin: 6px 0 14px;
+    }
+    /* Separatory sekcji: w karcie (szerokość 680 px) linie są potrzebne
+       najbardziej - sekcje to: dane strony, tryb monitorowania, selektor,
+       częstotliwość, powiadomienia i daty, test, akcje. */
+    body.wizard-tab #view-form .form-sep {
+      margin: 22px 0;
+    }
+    body.wizard-tab #view-form .form-actions {
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    body.wizard-tab #view-form .form-actions .btn-main {
+      min-width: 130px;
+      min-height: 44px;
+      padding: 11px 22px;
+      font-size: 15px;
+      border-radius: 8px;
+    }
+    body.wizard-tab #view-form .btn-pick,
+    body.wizard-tab #view-form #btn-test {
+      min-height: 44px;
+      padding: 11px 16px;
+      font-size: 14px;
+      border-radius: 8px;
+    }
+    body.wizard-tab #view-form .adv-toggle {
+      font-size: 14px;
+    }
+    /* Krok 3 kreatora: wybór elementu to GŁÓWNA ścieżka - duży fioletowy
+       przycisk, wyraźnie większy od łącznika "zaawansowane" pod spodem. */
+    body.wizard-tab #wizard-step-3 .btn-pick-primary {
+      min-height: 48px;
+      padding: 12px 22px;
+      font-size: 15px;
+      border-radius: 8px;
+    }
+    body.wizard-tab #wizard-step-3 .adv-toggle {
+      min-height: 28px;
+      font-size: 13px;
     }
     /* Widok restore (karta popup.html?restore=1) - ta sama oprawa graficzna
        co karta kreatora (body dostaje klase wizard-tab od popup.js):
@@ -1305,47 +1468,47 @@
     <div class="form-group">
       <div class="label-row">
         <label data-i18n="lblSiteUrl">URL Address</label>
-        <button type="button" class="info-btn" data-popover="hintJs" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-        </button>
       </div>
       <input type="text" id="site-url" placeholder="https://...">
+      <p class="field-hint" data-i18n="hintJs"></p>
     </div>
+
+    <hr class="form-sep">
 
     <div class="checkbox-row">
       <label class="checkbox-label">
         <input type="checkbox" id="site-rendered">
         <span data-i18n="chkRendered">Rendered page mode (JS-rendered sites)</span>
       </label>
-      <button type="button" class="info-btn" data-popover="hintRendered" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-      </button>
     </div>
+    <p class="field-hint" data-i18n="hintRendered"></p>
 
         <div class="checkbox-row">
           <label class="checkbox-label">
             <input type="checkbox" id="site-cookies">
             <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
           </label>
-          <button type="button" class="info-btn" data-popover="hintCookies" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-          </button>
         </div>
+        <p class="field-hint" data-i18n="hintCookies"></p>
+
+    <hr class="form-sep">
+
     <div id="advanced-section" class="adv-section open">
       <div class="adv-section-inner">
         <div class="form-group">
           <div class="label-row">
             <label data-i18n="lblSelector">Watch only part of the page (CSS selector)</label>
-            <button type="button" class="info-btn" data-popover="hintSelector" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-            </button>
           </div>
-          <input type="text" id="site-selector" placeholder="#content, .results, main">
           <button type="button" id="btn-pick" class="btn-secondary btn-pick" data-i18n="btnPick">Pick element on the page...</button>
+          <input type="text" id="site-selector" placeholder="#content, .results, main">
+          <p class="field-hint" data-i18n="hintSelector"></p>
         </div>
 
       </div>
     </div>
+
+    <hr class="form-sep">
+
     <div class="form-group">
       <div class="label-row">
         <label data-i18n="lblFreq">Check Frequency</label>
@@ -1364,39 +1527,41 @@
       </div>
     </div>
 
+    <hr class="form-sep">
+
     <div class="checkbox-row">
       <label class="checkbox-label">
         <input type="checkbox" id="site-notifications" checked>
         <span data-i18n="chkNotifications">Enable desktop notifications</span>
       </label>
-      <button type="button" class="info-btn" data-popover="hintNotifications" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-      </button>
     </div>
+    <p class="field-hint" data-i18n="hintNotifications"></p>
 
         <div class="checkbox-row">
           <label class="checkbox-label">
             <input type="checkbox" id="site-ignore-dates" checked>
             <span data-i18n="chkIgnoreDates">Ignore date and time changes</span>
           </label>
-          <button type="button" class="info-btn" data-popover="hintIgnoreDates" aria-expanded="false" data-i18n-aria="infoBtn" data-i18n-title="infoBtn">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-          </button>
         </div>
+        <p class="field-hint" data-i18n="hintIgnoreDates"></p>
 
+    <hr class="form-sep">
 
     <button type="button" id="btn-test" class="btn-secondary btn-pick" data-i18n="btnTest">Test check</button>
     <div id="test-result" class="test-result" role="status" aria-live="polite"></div>
 
     <div id="form-message" class="form-message" role="alert"></div>
 
-    <button id="btn-save" class="btn-main" data-i18n="btnSave">Save</button>
-    <button id="btn-cancel" class="btn-main btn-cancel" data-i18n="btnCancel">Cancel</button>
+    <div class="form-actions">
+      <button id="btn-save" class="btn-main" data-i18n="btnSave">Save</button>
+      <button id="btn-cancel" class="btn-main btn-cancel" data-i18n="btnCancel">Cancel</button>
+    </div>
   </div>
 
 
   <div id="view-wizard" style="display: none;">
     <h2 data-i18n="wizTitle">Add page</h2>
+    <p id="wizard-step-indicator" class="wizard-step-indicator"></p>
 
     <div id="wizard-steps" class="wizard-steps">
 
@@ -1421,11 +1586,14 @@
 
     <div id="wizard-step-3" class="wizard-step">
       <p class="wizard-question" data-i18n="wizSelectorQuestion">Monitor only a chosen part of the page?</p>
-      <div class="form-group">
-        <input type="text" id="wizard-selector" placeholder="#content, .results, main">
-        <button type="button" id="wizard-pick" class="btn-secondary btn-pick" data-i18n="btnPick">Pick element on the page...</button>
-      </div>
+      <button type="button" id="wizard-pick" class="btn-main btn-pick-primary" data-i18n="btnPick">Pick element on the page...</button>
       <p class="wizard-note" data-i18n="wizSelectorHint">Pick an element or type a CSS selector. Leave empty for the whole page.</p>
+      <button type="button" id="wizard-adv-toggle" class="adv-toggle" aria-expanded="false" aria-controls="wizard-adv">
+        <span data-i18n="wizAdvanced">Advanced: type a CSS selector yourself</span>
+      </button>
+      <div id="wizard-adv" class="adv-panel" style="display: none;">
+        <input type="text" id="wizard-selector" placeholder="#content, .results, main">
+      </div>
     </div>
 
     <div id="wizard-step-4" class="wizard-step">
