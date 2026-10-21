@@ -8,8 +8,9 @@
 // in chrome.storage.local ("wizardDraft") and popup.js restores it on the
 // next open (maybeRestoreWizard), so granting permission never loses progress.
 //
-// Custom interval: NOT offered in the wizard (it kept fighting the select
-// re-render); it stays available under the pencil (edit) form.
+// Custom interval: offered on the last step as the "Custom..." option. The
+// choice lives in wizardState (freqCustomOn + freqCustom) - NOT only in the
+// DOM - so renderWizard() can re-apply it without fighting the select.
 
 let wizardState = null;
 
@@ -62,6 +63,8 @@ function startWizard(prefill = null) {
     requireCookies: false,
     selector: '',
     freqIndex: DEFAULT_FREQ_INDEX,
+    freqCustomOn: false,
+    freqCustom: '',
     ignoreDates: true,
     enableNotifications: true
   };
@@ -109,6 +112,8 @@ function saveWizardDraft() {
         requireCookies: s.requireCookies,
         selector: s.selector,
         freqIndex: s.freqIndex,
+        freqCustomOn: s.freqCustomOn,
+        freqCustom: s.freqCustom,
         ignoreDates: s.ignoreDates,
         enableNotifications: s.enableNotifications
       }
@@ -182,14 +187,23 @@ function renderWizard() {
   if (s.step === 5) {
     const freq = document.getElementById('wizard-freq');
     const finalNote = document.getElementById('wizard-render-final');
-    freq.value = String(s.freqIndex);
-    // Rendered mode: no 1-minute checks.
+    freq.value = s.freqCustomOn ? 'custom' : String(s.freqIndex);
+    // Rendered mode: no 1-minute checks (preset nor custom).
     const oneMin = freq.querySelector('option[value="0"]');
     if (oneMin) oneMin.disabled = s.rendered;
-    if (s.rendered && freq.value === '0') {
+    if (s.rendered && !s.freqCustomOn && freq.value === '0') {
       freq.value = '1';
       s.freqIndex = 1;
     }
+    // "Custom..." interval: minutes field shown only for that option.
+    const customWrap = document.getElementById('wizard-freq-custom');
+    const customInput = document.getElementById('wizard-freq-custom-input');
+    customWrap.style.display = s.freqCustomOn ? 'flex' : 'none';
+    customInput.min = s.rendered ? '5' : '1';
+    if (s.rendered && s.freqCustomOn && s.freqCustom !== '' && Number(s.freqCustom) < 5) {
+      s.freqCustom = '5';
+    }
+    if (document.activeElement !== customInput) customInput.value = s.freqCustom;
     // Late rendered detection (cookies only known since step 3): keep the
     // user informed right where they finish the setup.
     finalNote.style.display = s.rendered ? 'block' : 'none';
@@ -393,8 +407,29 @@ async function wizardNext() {
   }
 
   if (s.step === 5) {
-    const freqIndex = parseInt(document.getElementById('wizard-freq').value, 10);
-    s.freqIndex = (s.rendered && freqIndex === 0) ? 1 : freqIndex;
+    const freqValue = document.getElementById('wizard-freq').value;
+    const isCustomFreq = freqValue === 'custom';
+    let freqMinutes = null;
+    if (isCustomFreq) {
+      const raw = document.getElementById('wizard-freq-custom-input').value.trim();
+      freqMinutes = Number(raw);
+      const minAllowed = s.rendered ? 5 : 1;
+      if (raw === '' || !Number.isInteger(freqMinutes) || freqMinutes < 1 || freqMinutes > 10080) {
+        showWizardMessage(t.errFreqRange);
+        return;
+      }
+      if (freqMinutes < minAllowed) {
+        showWizardMessage(t.errFreqRangeRendered);
+        return;
+      }
+      s.freqCustomOn = true;
+      s.freqCustom = String(freqMinutes);
+      s.freqIndex = parseInt(DEFAULT_FREQ_INDEX, 10); // fallback preset, like the edit form
+    } else {
+      const freqIndex = parseInt(freqValue, 10);
+      s.freqCustomOn = false;
+      s.freqIndex = (s.rendered && freqIndex === 0) ? 1 : freqIndex;
+    }
     s.ignoreDates = document.getElementById('wizard-ignore-dates').checked;
     s.enableNotifications = document.getElementById('wizard-notifications').checked;
     saveWizardDraft();
@@ -406,7 +441,7 @@ async function wizardNext() {
         name: s.name,
         url: s.url,
         freqIndex: s.freqIndex,
-        freqMinutes: null,
+        freqMinutes: isCustomFreq ? freqMinutes : null,
         ignoreDates: s.ignoreDates,
         requireCookies: s.requireCookies,
         enableNotifications: s.enableNotifications,
@@ -466,6 +501,8 @@ async function wizardPick() {
     requireCookies: s.requireCookies,
     selector: document.getElementById('wizard-selector').value.trim(),
     freqIndex: s.freqIndex,
+    freqCustomOn: s.freqCustomOn,
+    freqCustom: s.freqCustom,
     ignoreDates: s.ignoreDates,
     enableNotifications: s.enableNotifications
   };
@@ -500,6 +537,8 @@ function restoreWizardWithSelector(picked, draft) {
   s.requireCookies = !!(draft && draft.requireCookies);
   s.selector = (picked && picked.selector) || '';
   s.freqIndex = (draft && draft.freqIndex) || DEFAULT_FREQ_INDEX;
+  s.freqCustomOn = !!(draft && draft.freqCustomOn);
+  s.freqCustom = (draft && draft.freqCustom) ? String(draft.freqCustom) : '';
   s.ignoreDates = draft ? draft.ignoreDates !== false : true;
   s.enableNotifications = draft ? draft.enableNotifications !== false : true;
   wizardGo(3); // step 3 is now the selector step - let the user refine or move on
@@ -549,6 +588,8 @@ async function maybeRestoreWizard() {
     requireCookies: !!d.requireCookies,
     selector: d.selector || '',
     freqIndex: d.freqIndex || DEFAULT_FREQ_INDEX,
+    freqCustomOn: !!d.freqCustomOn,
+    freqCustom: d.freqCustom ? String(d.freqCustom) : '',
     ignoreDates: d.ignoreDates !== false,
     enableNotifications: d.enableNotifications !== false
   };
@@ -610,8 +651,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizard-pick').addEventListener('click', wizardPick);
   document.getElementById('wizard-freq').addEventListener('change', () => {
     if (!wizardState) return;
-    const freqIndex = parseInt(document.getElementById('wizard-freq').value, 10);
-    wizardState.freqIndex = (wizardState.rendered && freqIndex === 0) ? 1 : freqIndex;
+    const value = document.getElementById('wizard-freq').value;
+    if (value === 'custom') {
+      wizardState.freqCustomOn = true;
+      renderWizard();
+      document.getElementById('wizard-freq-custom-input').focus();
+    } else {
+      const freqIndex = parseInt(value, 10);
+      wizardState.freqCustomOn = false;
+      wizardState.freqIndex = (wizardState.rendered && freqIndex === 0) ? 1 : freqIndex;
+      renderWizard();
+    }
+    saveWizardDraft();
+  });
+  document.getElementById('wizard-freq-custom-input').addEventListener('input', () => {
+    if (!wizardState) return;
+    wizardState.freqCustom = document.getElementById('wizard-freq-custom-input').value.trim();
     saveWizardDraft();
   });
 

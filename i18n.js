@@ -247,7 +247,7 @@ const TRANSLATIONS = {
     opt10m: 'Co 10 minut',
     opt1h: 'Co 1 godzin\u0119',
     opt24h: 'Raz dziennie',
-    optCustom: 'W\u0142asny\u2026',
+    optCustom: 'W\u0142asna\u2026',
     lblMinutes: 'minut',
     errFreqRange: 'Podaj ca\u0142kowit\u0105 liczb\u0119 minut, od 1 do 10080 (7 dni).',
     errFreqRangeRendered: 'Tryb renderowany wymaga odst\u0119pu co najmniej 5 minut (maks. 10080).',

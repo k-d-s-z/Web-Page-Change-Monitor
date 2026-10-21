@@ -1451,7 +1451,12 @@
           <option value="2" data-i18n="opt10m">Every 10 minutes</option>
           <option value="3" data-i18n="opt1h">Every 1 hour</option>
           <option value="4" data-i18n="opt24h">Once a day</option>
+          <option value="custom" data-i18n="optCustom">Custom&hellip;</option>
         </select>
+        <div id="wizard-freq-custom" class="freq-custom" style="display: none;">
+          <input type="number" id="wizard-freq-custom-input" min="1" max="10080" step="1" inputmode="numeric" placeholder="15">
+          <span class="freq-unit" data-i18n="lblMinutes">minutes</span>
+        </div>
       </div>
       <div class="checkbox-row">
         <label class="checkbox-label">
