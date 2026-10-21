@@ -5,7 +5,8 @@
   <style>
     /* K2: CSS color variables - single place for the palette (foundation
        for a future light mode). K1: --brand (violet) = actions; statuses:
-       --warn (change detected / NEW), --ok (info/success), --danger.
+       --warn (change detected / NEW - violet, like the brand: amber was
+       too invasive), --ok (info/success), --danger.
        --white = text/icons on saturated (violet) surfaces in BOTH themes;
        --text-strong = emphasized text on theme surfaces (white in dark,
        near-black in light). */
@@ -35,7 +36,10 @@
       --brand-soft: #A78BFA;
       --brand-softer: #C4B5FD;
       --ok: #34D399;
-      --warn: #FBBF24;
+      /* Audyt: ostrzeżenia były bursztynowe (#FBBF24) - najgłośniejszy
+         kolor w całym UI. Teraz --warn to fiolet marki (spokojniejszy);
+         plakietki na tym tle dostają białe litery (zob. .badge-changed). */
+      --warn: #A78BFA;
       --danger: #F87171;
       --scrollbar-thumb: #374151;
       /* Wyroznienie grup kart vs samotne karty: fioletowy obrys marki
@@ -71,7 +75,7 @@
       --brand-soft: #7C3AED;
       --brand-softer: #6D28D9;
       --ok: #047857;
-      --warn: #B45309;
+      --warn: #6D28D9;
       --danger: #DC2626;
       --scrollbar-thumb: #C4CAD2;
       /* Light: biale karty na jasnym tle niemal zlewaja sie z grupa, wiec
@@ -623,8 +627,11 @@
     }
     .hint { text-align: center; }
     .badge-changed {
-      background: var(--warn);
-      color: #1F1F28; /* dark text: white on the amber dark-theme --warn is unreadable */
+      /* Audyt: fioletowe tło + białe litery zamiast bursztynowego
+         (żółty był zbyt inwazyjny). --brand-hover przechodzi WCAG AA
+         z białym tekstem w obu motywach (jak przyciski marki). */
+      background: var(--brand-hover);
+      color: var(--white);
       font-size: 11px;
       font-weight: 700;
       padding: 2px 6px;
@@ -633,7 +640,6 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    [data-theme="light"] .badge-changed { color: var(--white); }
     .badge-paused {
       background: var(--scrollbar-thumb);
       color: var(--text-soft);
@@ -1082,11 +1088,11 @@
       outline: 2px solid var(--brand);
       outline-offset: 1px;
     }
-    /* Render-mode suggestion on a card: warn pill, consistent with the
-       other card badges (NOWE / PAUSED). */
+    /* Render-mode suggestion on a card: pill consistent with the other
+       card badges (NOWE / PAUSED) - violet, white letters (audyt). */
     .badge-suggest {
-      background: var(--warn);
-      color: #1F1F28;
+      background: var(--brand-hover);
+      color: var(--white);
       font-size: 11px;
       font-weight: 700;
       padding: 2px 6px;
@@ -1094,9 +1100,6 @@
       margin-left: 5px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-    }
-    [data-theme="light"] .badge-suggest {
-      color: var(--white);
     }
     /* Wizard dodawania strony */
     /* Wszystkie kroki w JEDNYM kontenerze o stalej wysokosci (zmierzonej pod
