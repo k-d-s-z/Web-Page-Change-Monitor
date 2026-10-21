@@ -3,18 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <title>Change details &#x2014; Web Page Change Monitor</title>
+  <!-- Audyt: wspolna paleta (theme.css) + wspolny slownik (i18n.js), zeby
+       motywy i jezyk nie rozjezdzaly sie z popupem. -->
+  <link rel="stylesheet" href="theme.css">
   <style>
+    /* Tylko zmienne specyficzne dla widoku diff; kolory marki/statusow
+       i motyw (dark/light) zyja w theme.css (audyt). --accent to celowy
+       alias na zmienne marki z theme.css. */
     :root {
-      color-scheme: dark;
-      --bg: #09090E;
       --panel: #121318;
       --panel-2: #18181F;
       --panel-3: #1F1F28;
-      --border: #2B2B36;
-      --muted: #9CA3AF;
-      --text: #F3F4F6;
-      --accent: #A78BFA;
-      --accent-strong: #8B5CF6;
+      --muted: var(--text-2);
+      --accent: var(--brand-soft);
+      --accent-strong: var(--brand);
       --success-bg: rgba(34, 197, 94, 0.18);
       --danger-bg: rgba(248, 113, 113, 0.18);
       --removed-bg: rgba(248, 113, 113, 0.12);
@@ -24,16 +26,9 @@
 
     /* Light mode: palette override + a few rgba overlays that assumed dark bg. */
     [data-theme="light"] {
-      color-scheme: light;
-      --bg: #F6F7F9;
       --panel: #FFFFFF;
       --panel-2: #F2F4F6;
       --panel-3: #ECEFF2;
-      --border: #D8DCE2;
-      --muted: #5B6470;
-      --text: #1F2328;
-      --accent: #7C3AED;
-      --accent-strong: #6D28D9;
       --success-bg: rgba(5, 150, 105, 0.14);
       --danger-bg: rgba(220, 38, 38, 0.14);
       --removed-bg: rgba(220, 38, 38, 0.10);
@@ -45,8 +40,8 @@
     [data-theme="light"] .diff-line.equivalent { color: rgba(31, 35, 40, 0.72); }
     [data-theme="light"] .diff-line.changed { background: rgba(0, 0, 0, 0.03); }
     [data-theme="light"] .diff-skip { background: rgba(0, 0, 0, 0.04); }
-    [data-theme="light"] ins,
-    [data-theme="light"] del { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.10); }
+    [data-theme="light"] .diff-line.changed ins,
+    [data-theme="light"] .diff-line.changed del { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.10); }
     /* Default ins/del/h1 colors are pale (made for the dark theme) and vanish
        on a light background - give them dark, readable colors in light mode. */
     [data-theme="light"] ins { color: #065F46; }
@@ -227,6 +222,13 @@
       text-decoration: none;
       border-radius: 4px;
       padding: 0 2px;
+    }
+
+    /* Audyt: ramka wokol tekstu (box-shadow) tylko w liniach ze zmiana
+       slowa, gdzie wskazuje, CO sie zmienilo; w calych dodanych/usunietych
+       liniach byla szumem na tle kolorowej linii. */
+    .diff-line.changed ins,
+    .diff-line.changed del {
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     }
 
@@ -294,6 +296,7 @@
     <div class="diff" id="diff"></div>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="diff.js"></script>
 </body>
 </html>

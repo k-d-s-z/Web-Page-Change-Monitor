@@ -203,7 +203,9 @@ function renderWizard() {
   }
 
   if (s.step === 4) {
-    document.getElementById('wizard-cookies').checked = s.requireCookies;
+    // Audyt: odpowied\u017a Tak/Nie dwoma przyciskami (checkbox o innej
+    // tre\u015bci ni\u017c pytanie myli\u0142). Stan trzymany w wizardState.
+    syncLoginButtons(Boolean(s.requireCookies));
   }
 
   if (s.step === 5) {
@@ -415,7 +417,9 @@ async function wizardNext() {
   }
 
   if (s.step === 4) {
-    s.requireCookies = document.getElementById('wizard-cookies').checked || s.rendered;
+    // Audyt: odpowied\u017a jest juz w wizardState.requireCookies (przyciski
+    // Tak/Nie); rendered zawsze korzysta z sesji przegladarki.
+    s.requireCookies = s.requireCookies || s.rendered;
     // Session cookies over plain http:// are refused by the background too;
     // say so here instead of failing at the very last step.
     if (s.requireCookies && /^http:/i.test(s.url)) {
@@ -653,9 +657,35 @@ async function maybeRestoreWizard() {
   return true;
 }
 
+// Audyt: stan przycisk\u00f3w Tak/Nie w kroku 4 - wybrany dostaje klas\u0119 .sel
+// (styl marki), drugi wraca do neutralnego wygl\u0105du.
+function syncLoginButtons(requireCookies) {
+  const yesBtn = document.getElementById('wizard-login-yes');
+  const noBtn = document.getElementById('wizard-login-no');
+  if (!yesBtn || !noBtn) return;
+  yesBtn.classList.toggle('sel', requireCookies);
+  noBtn.classList.toggle('sel', !requireCookies);
+  yesBtn.setAttribute('aria-pressed', String(requireCookies));
+  noBtn.setAttribute('aria-pressed', String(!requireCookies));
+}
+
+function setLoginAnswer(requireCookies) {
+  if (!wizardState) return;
+  // Tylko zapis odpowiedzi; przej\u015bcie Dalej zostaje przy "Dalej" -
+  // walidacja http+ciasteczka w wizardNext musi si\u0119 wykona\u0107.
+  wizardState.requireCookies = requireCookies;
+  syncLoginButtons(requireCookies);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('wizard-next').addEventListener('click', wizardNext);
   document.getElementById('wizard-back').addEventListener('click', wizardBack);
+  // Audyt: krok 4 odpowiada na pytanie o logowanie przyciskami Tak/Nie
+  // (zamiast checkboxa o innej tre\u015bci ni\u017c pytanie).
+  const yesBtn = document.getElementById('wizard-login-yes');
+  const noBtn = document.getElementById('wizard-login-no');
+  yesBtn.addEventListener('click', () => { setLoginAnswer(true); });
+  noBtn.addEventListener('click', () => { setLoginAnswer(false); });
   document.getElementById('wizard-cancel').addEventListener('click', async () => {
     // Only END the wizard here (draft removed -> background cleanupAbandonedWizard
     // fires via storage.onChanged and releases the granted origin). The popup

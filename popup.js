@@ -38,9 +38,9 @@ let pendingHttpConfirm = null;
 let isRefreshingAll = false;
 let refreshTracker = null;
 let activeSiteCount = 0;
+let totalSiteCount = 0; // audyt: tez "Oznacz jako przeczytane" ma byc wygaszone w pustym stanie
 let changedOnly = false; // I5: "changed only" list filter (toggle from batch summary)
 let summaryTimer = null;
-const pendingDeleteConfirm = new Set(); // siteId z aktywnym potwierdzeniem usuniecia
 // Czas auto-ukrywania podsumowan (pokazywanych przez showSummary z trzecim
 // argumentem). Utracony przy przepisaniu pliku na bazie popup-3.js (bral
 // sie z innej galezi pliku) - jego brak zrobil ReferenceError w KAZDYM
@@ -55,6 +55,12 @@ const SUMMARY_HIDE_MS = 4000;
 const IS_WIZARD_TAB = /[?&]wizard=1/.test(window.location.search);
 const WIZARD_TAB_URL = chrome.runtime.getURL('popup.html') + '?wizard=1';
 const IS_RESTORE_TAB = /[?&]restore=1/.test(window.location.search);
+// === Audyt UX#2: edycja strony przeniesiona z popupu do KARTY ===
+// Formularz edycji (652 px) przekracza limit wysokości popupu (600 px),
+// a w karcie jest miejsce na trwałe podpowiedzi pod polami (zamiast
+// popoverów "?" z czcionką, ktorej nie dalo sie czytac).
+const IS_EDIT_TAB = /[?&]edit=1/.test(window.location.search);
+const EDIT_TAB_URL = chrome.runtime.getURL('popup.html') + '?edit=1';
 
 // Wersja dla strony rozszerzenia (popup/karta): tab.url czytamy po FILTRZE
 // PREFIXU - tabs.query({url: wzorzec}) notorycznie zawodzi dla wlasnych stron
@@ -97,6 +103,57 @@ async function openWizardTab(prefill) {
   }
 }
 
+// Otwiera karte edycji strony (albo aktywuje juz istniejaca - nigdy drugiej).
+// Dla ZYWEJ karty id strony idzie przez runtime message, dla nowej - przez
+// storage (editTarget), bo nowa karta czyta go w swoim DOMContentLoaded.
+async function openEditTab(siteId) {
+  try {
+    const base = chrome.runtime.getURL('popup.html');
+    const all = await chrome.tabs.query({});
+    const tab = (all || []).find((t) =>
+      (t.url || '').split('#')[0].startsWith(base) && /[?&]edit=1/.test(t.url || ''));
+    if (tab) {
+      if (siteId) {
+        try { await chrome.runtime.sendMessage({ action: 'editStart', siteId }); } catch (err) { /* noop */ }
+      }
+      try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (err) { /* noop */ }
+      try { await chrome.tabs.update(tab.id, { active: true }); } catch (err) { /* noop */ }
+      return;
+    }
+    if (siteId) {
+      try { await chrome.storage.local.set({ editTarget: { id: siteId, ts: Date.now() } }); } catch (err) { /* noop */ }
+    }
+    await chrome.tabs.create({ url: EDIT_TAB_URL });
+  } catch (err) {
+    // Awaryjnie (brak tabs API): edycja w popupie, jak dotychczas.
+    showFormById(siteId);
+  }
+}
+
+// Fallback bez tabs API: zaladuj strone do formularza w tym samym oknie.
+async function showFormById(siteId) {
+  let site = null;
+  if (siteId) {
+    const all = await chrome.storage.local.get('sites');
+    site = (all.sites || []).find((s) => s.id === siteId) || null;
+  }
+  showForm(site);
+}
+
+// Karta edycji: wczytuje strone wskazana przez openEditTab. Bez id (albo
+// gdy strona juz nie istnieje) pokazuje pusty formularz - to karta edycji,
+// wiec pusty formularz to bezpieczny fallback, nie dead end.
+async function loadEditTarget(explicitId) {
+  let id = explicitId || null;
+  if (!id) {
+    const data = await chrome.storage.local.get('editTarget');
+    const target = data.editTarget;
+    if (target && Date.now() - (target.ts || 0) <= 5 * 60 * 1000) id = target.id;
+    try { await chrome.storage.local.remove('editTarget'); } catch (err) { /* noop */ }
+  }
+  await showFormById(id);
+}
+
 function toggleSettingsPanel(forceOpen = null) {
   const panel = document.getElementById('settings-panel');
   const btn = document.getElementById('btn-settings');
@@ -123,7 +180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Karta kreatora / karta restore: od razu ustalamy wyglad (body.wizard-tab
   // rozszerza layout na cale okno) i chowamy liste - bez tego lista migala
   // by klatke zanim przelaczymy widoki.
-  if (IS_WIZARD_TAB || IS_RESTORE_TAB) {
+  if (IS_WIZARD_TAB || IS_RESTORE_TAB || IS_EDIT_TAB) {
     document.body.classList.add('wizard-tab');
     const list = document.getElementById('view-list');
     if (list) list.style.display = 'none';
@@ -146,6 +203,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (IS_RESTORE_TAB) {
     // Karta nadania dostepu po restore: pokazuje tylko widok restore.
+    // Audyt: tytul karty zamiast surowego adresu rozszerzenia w pasku.
+    document.title = TRANSLATIONS[currentLang].restoreAccessTitle || document.title;
     document.getElementById('view-restore').style.display = 'block';
     await initRestoreTab();
     return;
@@ -155,6 +214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Karta kreatora: zawsze kreator - nowy, wznowiony po okienku zgody
     // (maybeRestoreWizard) albo z prefillem (przycisk "+", menu kontekstowe,
     // message z innego kontekstu). Lista stron tu nie wystepuje.
+    // Audyt: tytul karty zamiast surowego adresu rozszerzenia.
+    document.title = TRANSLATIONS[currentLang].wizTitle;
     const pre = await chrome.storage.local.get('wizardPrefill');
     const prefill = pre.wizardPrefill;
     if (prefill) {
@@ -183,9 +244,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     maybeShowChangedHint();
   }
 
+  if (IS_EDIT_TAB) {
+    // Karta edycji (audyt UX#2): edycja zyje w karcie jak kreator.
+    // Kolejnosc przywracania: wynik pickera > edytowana strona (editTarget
+    // albo message zywej karty) > szkic przerwany okienkiem zgody.
+    document.title = TRANSLATIONS[currentLang].titleEdit;
+    const picked = await maybeRestorePicker();
+    if (!picked) await loadEditTarget();
+    if (!picked) await maybeRestoreEditDraft();
+    chrome.runtime.onMessage.addListener(async (msg) => {
+      if (!msg || msg.action !== 'editStart' || !msg.siteId) return;
+      await loadEditTarget(msg.siteId);
+    });
+  }
+
   document.getElementById('btn-add-view').addEventListener('click', openAddForm);
   document.getElementById('btn-test').addEventListener('click', testSite);
-  document.getElementById('btn-cancel').addEventListener('click', () => { clearEditDraft(); showList(); });
+  document.getElementById('btn-cancel').addEventListener('click', () => {
+    clearEditDraft();
+    // Audyt UX#2: w karcie edycji Anuluj zamyka karte (w popupie wraca
+    // do listy, jak dotychczas).
+    if (IS_EDIT_TAB) { window.close(); return; }
+    showList();
+  });
   document.getElementById('btn-save').addEventListener('click', saveSite);
   document.getElementById('btn-pick').addEventListener('click', startPicker);
   document.getElementById('site-rendered').addEventListener('change', syncRenderedUI);
@@ -217,8 +298,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   // Theme (K2 follow-up): light/dark palette switch, stored in storage.
+  // Audyt: brak zapisanego wyboru oznaczal CIEMNY motyw; teraz pierwsze
+  // uruchomienie sledzi ustawienie systemu (prefers-color-scheme).
   const storedTheme = await chrome.storage.local.get('theme');
-  applyTheme(storedTheme.theme);
+  let theme = storedTheme.theme;
+  if (!theme) {
+    try { theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+    catch (err) { theme = 'dark'; }
+  }
+  applyTheme(theme);
   document.querySelectorAll('.theme-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const theme = btn.dataset.theme === 'light' ? 'light' : 'dark';
@@ -283,6 +371,16 @@ function updateRefreshAllButton() {
   btn.classList.toggle('busy', isRefreshingAll);
   btn.title = label;
   btn.setAttribute('aria-label', label);
+
+  // Audyt: w pustym stanie "Odswiez wszystkie" bylo wygaszone, a "Oznacz
+  // jako przeczytane" dalej aktywne - te same zasady dla obu. Mark-read
+  // dotyczy tez pauzowanych stron, wiec licznik jest calkowity, nie "aktywne".
+  const markBtn = document.getElementById('btn-mark-read');
+  if (markBtn) {
+    markBtn.disabled = totalSiteCount === 0;
+    markBtn.title = t.btnMarkRead;
+    markBtn.setAttribute('aria-label', t.btnMarkRead);
+  }
 }
 
 function showSummary(text, kind = '', autoHideMs = 0) {
@@ -427,6 +525,11 @@ function onStorageChanged(changes, area) {
   if (area !== 'local') return;
   if (IS_WIZARD_TAB && changes.pendingPicker && typeof wizardState !== 'undefined' && wizardState) {
     applyWizardPickFromStorage();
+  }
+  // Karta edycji: wynik pickera ("Wybierz element na stronie") wraca przez
+  // storage, gdy uzytkownik wraca z karty monitorowanej strony.
+  if (IS_EDIT_TAB && changes.pendingPicker) {
+    maybeRestorePicker();
   }
   if (!changes.sites || !refreshTracker) return;
 
@@ -1000,6 +1103,14 @@ async function maybeRestorePicker() {
     }
   } else {
     if (IS_WIZARD_TAB) return false;
+    // Wynik pickera z FORMULARZA EDYCJI nalezy do karty edycji
+    // (popup.html?edit=1): konsumuje go tamtej karty DOMContentLoaded lub
+    // onStorageChanged. Popup (lista) tylko otwiera te karte - nie zjada
+    // tu rekordu, ktorego karta nie zobaczy.
+    if (!IS_EDIT_TAB) {
+      await openEditTab(null);
+      return true;
+    }
   }
 
   if (data.pickerDraft && data.pickerDraft.wizard) {
@@ -1283,6 +1394,12 @@ async function saveSite() {
   }
 
   await clearEditDraft(); // saved: the draft snapshot is no longer needed
+  // Audyt UX#2: zapis z karty edycji zamyka karte; popup wraca do listy.
+  if (IS_EDIT_TAB) {
+    window.close();
+    if (res.needsBaseline) triggerCheck(res.siteId);
+    return;
+  }
   await showList();
   if (res.needsBaseline) triggerCheck(res.siteId);
 }
@@ -1299,36 +1416,13 @@ async function togglePause(siteId) {
   renderSites();
 }
 
-// Usuniecie strony wymaga POTWIERDZENIA: klik na koszu pokazuje ostrzezenie
-// "Usunac te strone? [Usun] [Anuluj]". Kazdy z przyciskow NAJPIERW zamyka
-// ostrzezenie (clearSummary), dopiero potem dziala - pasek podsumowania nie
-// moze "wisiec" po potwierdzeniu (poprzednia wersja opierala sie na tym, ze
-// podsumowanie Undo samo nadpisze ostrzezenie, i przy bledzie w srodku
-// sciezki usuwania ostrzezenie zostawalo na ekranie).
+// Audyt: potwierdzenie usuwania zywie NA KARCIE (cards.js pokazuje czerwony
+// "Usun" + "Anuluj" po kliknieciu kosza) - poprzedni flow potwierdzal w
+// stopce, daleko od kafelka, przyciskami o identycznym wygladzie. Tu zostaje
+// samo usuwanie; omylkowe potwierdzenie pokrywa Cofnij (showUndoSummary).
 async function deleteSite(siteId) {
-  const t = TRANSLATIONS[currentLang];
   const data0 = await chrome.storage.local.get('sites');
-  const site0 = (data0.sites || []).find((s) => s.id === siteId);
-  if (!site0) return;
-  if (pendingDeleteConfirm.has(siteId)) {
-    // Potwierdzone: wykonaj usuwanie.
-    pendingDeleteConfirm.delete(siteId);
-  } else {
-    // Pierwsze klikniecie: pokaz ostrzezenie.
-    showSummaryNodes([
-      summaryText(`${t.deleteConfirmTitle} `),
-      summaryText(site0.name),
-      summaryText(` \u2022 `),
-      summaryButton(t.btnDeleteYes, () => {
-        clearSummary();
-        pendingDeleteConfirm.add(siteId);
-        deleteSite(siteId);
-      }),
-      summaryText(` \u2022 `),
-      summaryButton(t.btnCancel, () => { clearSummary(); })
-    ], 'warn', 0);
-    return;
-  }
+  if (!(data0.sites || []).some((s) => s.id === siteId)) return;
 
   checkingIds.delete(siteId);
 

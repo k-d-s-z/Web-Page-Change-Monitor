@@ -1,0 +1,65 @@
+/* Wspolna paleta rozszerzenia (audyt: rozproszone trzy zestawy kolorow
+   - popup.html, diff.html, picker.css - rozjezdzaly sie miedzy widokami).
+   Ładuja ja popup.html i diff.html; kazdy widok trzyma lokalnie tylko
+   zmienne specyficzne dla swojego layoutu (np. --panel* w diff.html,
+   --group-* w popup.html).
+
+   picker.css NIE dziedziczy: jest wstrzykiwany do monitorowanych STRON
+   przez chrome.scripting.insertCSS, gdzie var() z tej palety nie istnieje
+   - dlatego ma kolory zapisane na sztywno, celowo odwolujace sie do
+   wartosci z tego pliku. Przy zmianie marki zaktualizuj oba.
+
+   --white = tekst/ikony na nasyconych (fioletowych) powierzchniach w OBU
+   motywach; --text-strong = tekst zaakcentowany na powierzchniach motywu. */
+
+:root {
+  color-scheme: dark;
+  --bg: #09090E;
+  --border: #2B2B36;
+  --border-strong: #3B3B4A;
+  --text: #F3F4F6;
+  --text-soft: #E5E7EB;
+  --text-heading: #F5F5F5;
+  --white: #FFFFFF;
+  --text-strong: #FFFFFF;
+  --text-2: #9CA3AF;
+  --text-3: #D1D5DB;
+  --text-meta: #C7CED6;
+  --text-muted: #6B7280;
+  --brand: #8B5CF6;
+  /* K5: baza przyciskow rozjasniona w strone fioletu ikony (#8352F0 to
+     najjasniejszy ton, ktory trzyma WCAG AA 4.5:1 z bialym tekstem;
+     hover rozjasnia do --brand, jak srodkowy ton ikony). */
+  --brand-hover: #8352F0;
+  --brand-soft: #A78BFA;
+  --brand-softer: #C4B5FD;
+  --ok: #34D399;
+  /* Audyt: ostrzezenia byly bursztynowe (#FBBF24) - najglosniejszy kolor
+     w calym UI. --warn to fiolet marki; plakietki na tym tle dostaja
+     biale litery (zob. .badge-changed w popup.html). */
+  --warn: #A78BFA;
+  --danger: #F87171;
+}
+
+/* Light: zmienia sie tylko paleta - reguly widokow trzymaja sie var(). */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F6F7F9;
+  --border: #D8DCE2;
+  --border-strong: #C4CAD2;
+  --text: #1F2328;
+  --text-soft: #2F3540;
+  --text-heading: #14171B;
+  --text-strong: #14171B;
+  --text-2: #5B6470;
+  --text-3: #3D434C;
+  --text-meta: #4A5158;
+  --text-muted: #6B7280;
+  --brand: #7C3AED;
+  --brand-hover: #6D28D9;
+  --brand-soft: #7C3AED;
+  --brand-softer: #6D28D9;
+  --ok: #047857;
+  --warn: #6D28D9;
+  --danger: #DC2626;
+}

@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <title>Web Page Change Monitor</title>
+  <!-- Wspolna paleta (audyt: theme.css dzielony z diff.html, zeby motywy
+       sie nie rozjezdzaly); lokalne ponizej dodaja tylko zmienne specyficzne
+       dla popupu. -->
+  <link rel="stylesheet" href="theme.css">
   <style>
     /* K2: CSS color variables - single place for the palette (foundation
        for a future light mode). K1: --brand (violet) = actions; statuses:
@@ -9,38 +14,13 @@
        too invasive), --ok (info/success), --danger.
        --white = text/icons on saturated (violet) surfaces in BOTH themes;
        --text-strong = emphasized text on theme surfaces (white in dark,
-       near-black in light). */
+       near-black in light). Wspolne kolory zyja w theme.css; tu zostaja
+       tylko zmienne specyficzne dla popupu. */
     :root {
-      color-scheme: dark;
-      --bg: #09090E;
       --bg-card: #18181F;
       --bg-soft: #23232F;
       --bg-inset: #121218;
       --bg-active: #1F1F28;
-      --border: #2B2B36;
-      --border-strong: #3B3B4A;
-      --text: #F3F4F6;
-      --text-soft: #E5E7EB;
-      --text-heading: #F5F5F5;
-      --white: #FFFFFF;
-      --text-strong: #FFFFFF;
-      --text-2: #9CA3AF;
-      --text-3: #D1D5DB;
-      --text-meta: #C7CED6;
-      --text-muted: #6B7280;
-      --brand: #8B5CF6;
-      /* K5: button base lightened toward the app icon's violet (#8352F0 is
-         the lightest tone that still passes WCAG AA 4.5:1 with white text;
-         hover brightens to --brand #8B5CF6, like the icon mid-tone). */
-      --brand-hover: #8352F0;
-      --brand-soft: #A78BFA;
-      --brand-softer: #C4B5FD;
-      --ok: #34D399;
-      /* Audyt: ostrzeżenia były bursztynowe (#FBBF24) - najgłośniejszy
-         kolor w całym UI. Teraz --warn to fiolet marki (spokojniejszy);
-         plakietki na tym tle dostają białe litery (zob. .badge-changed). */
-      --warn: #A78BFA;
-      --danger: #F87171;
       --scrollbar-thumb: #374151;
       /* Wyroznienie grup kart vs samotne karty: fioletowy obrys marki
          + subtelny gradient fioletu u gory tla grupy (dark). */
@@ -52,31 +32,13 @@
 
     /* Light mode: only the palette changes - every rule keeps its var() refs.
        Text that is white in dark mode uses --text-strong, so it turns
-       near-black here; --white stays white for text on violet buttons. */
+       near-black here; --white stays white for text on violet buttons.
+       Wspolna paleta (bg/border/tekst/marka/statusy) zyje w theme.css. */
     [data-theme="light"] {
-      color-scheme: light;
-      --bg: #F6F7F9;
       --bg-card: #FFFFFF;
       --bg-soft: #ECEFF2;
       --bg-inset: #F2F4F6;
       --bg-active: #F5F6F8;
-      --border: #D8DCE2;
-      --border-strong: #C4CAD2;
-      --text: #1F2328;
-      --text-soft: #2F3540;
-      --text-heading: #14171B;
-      --text-strong: #14171B;
-      --text-2: #5B6470;
-      --text-3: #3D434C;
-      --text-meta: #4A5158;
-      --text-muted: #6B7280;
-      --brand: #7C3AED;
-      --brand-hover: #6D28D9;
-      --brand-soft: #7C3AED;
-      --brand-softer: #6D28D9;
-      --ok: #047857;
-      --warn: #6D28D9;
-      --danger: #DC2626;
       --scrollbar-thumb: #C4CAD2;
       /* Light: biale karty na jasnym tle niemal zlewaja sie z grupa, wiec
          wyroznik musi byc WYRAZISTY: pelniejszy fiolet na obrysie (0.75)
@@ -1051,6 +1013,47 @@
     .adv-panel.open {
       display: block;
     }
+    /* Audyt: potwierdzenie usuwania na karcie - czerwony "Usu\u0144"
+       odr\u00f3\u017cnia si\u0119 od neutralnego "Anuluj" (poprzednio w stopce
+       oba by\u0142y fioletowe i identyczne). */
+    .delete-confirm {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .delete-confirm[hidden] {
+      display: none;
+    }
+    .dc-title {
+      font-size: 12px;
+      color: var(--text-2);
+      margin-right: 2px;
+    }
+    .btn-danger {
+      background: var(--danger);
+      color: #1F1F28; /* ciemny napis na jasnej czerwieni dark; w light --danger ciemniejszy - bia\u0142y napis */
+      border: none;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    [data-theme="light"] .btn-danger {
+      color: var(--white);
+    }
+    .btn-danger:hover {
+      filter: brightness(1.08);
+    }
+    .btn-danger:focus-visible {
+      outline: 2px solid var(--danger);
+      outline-offset: 1px;
+    }
+    .delete-confirm .btn-secondary {
+      padding: 4px 10px;
+      font-size: 12px;
+      min-height: 0;
+    }
 
     /* Visually hidden but available to screen readers (a11y live region). */
     .sr-only {
@@ -1108,6 +1111,29 @@
     .wizard-steps { position: relative; height: 220px; overflow-y: auto; margin-bottom: 4px; }
     .wizard-step { position: absolute; inset: 0; margin-bottom: 0; }
     .wizard-question { font-size: 14px; font-weight: 600; margin: 2px 0 10px; color: var(--text-strong); }
+    /* Krok 4 (audyt): odpowied\u017a Tak/Nie dwoma przyciskami zamiast checkboxa
+       o innej tre\u015bci ni\u017c pytanie. Wybrany przycisk dostaje styl marki. */
+    .wiz-yesno {
+      display: flex;
+      gap: 10px;
+      margin: 0 0 14px;
+    }
+    .btn-yesno {
+      flex: 1;
+      width: auto;
+      margin-bottom: 0;
+      min-height: 44px;
+      font-size: 14px;
+    }
+    .btn-yesno.sel {
+      background: var(--brand-hover);
+      color: var(--white);
+      border-color: transparent;
+      font-weight: 700;
+    }
+    .btn-yesno.sel:hover {
+      background: var(--brand);
+    }
     /* Audyt UX#6: wskaźnik kroku pod tytułem kreatora - "Krok X z 5 · nazwa
        kroku" zamiast samego "Dodaj stronę" na każdym ekranie. */
     .wizard-step-indicator {
@@ -1601,13 +1627,11 @@
 
     <div id="wizard-step-4" class="wizard-step">
       <p class="wizard-question" data-i18n="wizLoginQuestion">Does this page require logging in?</p>
-      <div class="checkbox-row">
-        <label class="checkbox-label">
-          <input type="checkbox" id="wizard-cookies">
-          <span data-i18n="chkCookies">Require cookies (logged-in sites)</span>
-        </label>
+      <div class="wiz-yesno" role="group" data-i18n-aria="wizLoginQuestion">
+        <button type="button" id="wizard-login-yes" class="btn-secondary btn-yesno" data-i18n="wizYes">Yes</button>
+        <button type="button" id="wizard-login-no" class="btn-secondary btn-yesno" data-i18n="wizNo">No</button>
       </div>
-      <p class="wizard-note" data-i18n="wizLoginHint">If yes, tick the box above.</p>
+      <p class="wizard-note" data-i18n="wizLoginHint">Yes means monitoring will use your browser session (cookies). Not sure? Choose No.</p>
     </div>
 
     <div id="wizard-step-5" class="wizard-step">

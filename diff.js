@@ -18,40 +18,9 @@
 const CONTEXT_LINES = 3;   // ile linii kontekstu wok\u00f3\u0142 ka\u017cdego bloku zmian
 const COLLAPSE_MIN = 10;   // d\u0142u\u017csze niezmienione ci\u0105gi s\u0105 zwijane
 
-const STR = {
-  en: {
-    title: 'Change details \u2014 Web Page Change Monitor',
-    openPage: 'Open page',
-    siteNotFound: 'Site not found.',
-    noVersionYet: 'No stored version of this page yet \u2014 the next detected change will show a full diff.',
-    onlyCurrent: 'Only the current version is stored (baseline saved after the update). The next detected change will show a diff.',
-    noChanges: 'No visible text changes.',
-    monitoredUrl: 'monitored',
-    skipLines: 'unchanged lines',
-    skipTitle: 'Click to show these lines',
-    added: 'Added',
-    removed: 'Removed',
-    onlyChanges: 'Show only changes',
-    diffSimplified: 'Large change - the comparison is simplified: all lines are shown as replaced.',
-    statsReplaced: 'Lines',
-  },
-  pl: {
-    title: 'Szczeg\u00f3\u0142y zmiany \u2014 Web Page Change Monitor',
-    openPage: 'Otw\u00f3rz stron\u0119',
-    siteNotFound: 'Nie znaleziono takiej strony.',
-    noVersionYet: 'Nie ma jeszcze zapisanej wersji tej strony \u2014 kolejna wykryta zmiana poka\u017ce pe\u0142ny diff.',
-    onlyCurrent: 'Zapisana jest tylko bie\u017c\u0105ca wersja (baseline zapisany po aktualizacji). Kolejna wykryta zmiana poka\u017ce diff.',
-    noChanges: 'Brak widocznych zmian tre\u015bci.',
-    monitoredUrl: 'monitorowany',
-    skipLines: 'niezmienionych linii',
-    skipTitle: 'Kliknij, aby pokaza\u0107 te linie',
-    added: 'Dodano',
-    removed: 'Usuni\u0119to',
-    onlyChanges: 'Poka\u017c tylko zmiany',
-    diffSimplified: 'Du\u017ca zmiana - por\u00f3wnanie uproszczone: wszystkie linie pokazano jako wymienione.',
-    statsReplaced: 'Linie',
-  }
-};
+// Audyt: wlasmny slownik STR przeniesiony do i18n.js (klucze diff*), zeby
+// wszystkie tlumaczenia rozszerzenia zyly w jednym miejscu. diff.html ladowal
+// i18n.js przed diff.js, wiec TRANSLATIONS jest tu dostepne.
 
 function esc(s) {
   return (s || '').replace(/[&<>"]/g, (c) => ({
@@ -143,19 +112,81 @@ function groupOps(ops) {
 
 // Blok zmian: pary del/ins (do 3 par) renderowane word-diffem liniowo,
 // reszta jako osobne linie dodane/usuni\u0119te.
+// Audyt: podobie\u0144stwo dw\u00f3ch linii jako u\u0142amek wsp\u00f3lnych s\u0142\u00f3w -
+// "Cena: 199 z\u0142" vs "Cena: 179 z\u0142" to edycja, nie "usuni\u0119to + dodano".
+function wordSimilarity(x, y) {
+  const wx = x.split(/\s+/).filter(Boolean);
+  const wy = y.split(/\s+/).filter(Boolean);
+  if (!wx.length || !wy.length) return 0;
+  const set = new Set(wy);
+  let shared = 0;
+  wx.forEach((w) => { if (set.has(w)) shared++; });
+  return shared / Math.max(wx.length, wy.length);
+}
+
+// Paruje zach\u0142annie najbardziej podobne pary del/ins (pr\u00f3g 0.5),
+// deterministycznie: najlepszy wynik pierwszy, remisy po kolejno\u015bci.
+function pairChangedLines(dels, ins) {
+  const cands = [];
+  dels.forEach((d, di) => ins.forEach((n, ni) => {
+    const score = wordSimilarity(d.l, n.l);
+    if (score >= 0.5) cands.push({ di, ni, score });
+  }));
+  cands.sort((a, b) => b.score - a.score || a.di - b.di || a.ni - b.ni);
+  const usedD = new Set();
+  const usedI = new Set();
+  const pairs = [];
+  for (const c of cands) {
+    if (usedD.has(c.di) || usedI.has(c.ni)) continue;
+    usedD.add(c.di);
+    usedI.add(c.ni);
+    pairs.push({ del: dels[c.di], ins: ins[c.ni] });
+  }
+  return {
+    pairs,
+    restDel: dels.filter((_, idx) => !usedD.has(idx)),
+    restIns: ins.filter((_, idx) => !usedI.has(idx))
+  };
+}
+
 function renderChangeBlock(block) {
   let html = '';
   const dels = block.filter((o) => o.t === 'del');
   const ins = block.filter((o) => o.t === 'ins');
-
-  if (dels.length === ins.length && dels.length > 0 && dels.length <= 3) {
-    for (let p = 0; p < dels.length; p++) {
-      html += line('changed', renderInline(dels[p].l, ins[p].l), dels[p].l);
-    }
-  } else {
+  if (!dels.length || !ins.length) {
     dels.forEach((o) => { html += line('removed', `<del>${esc(o.l)}</del>`, o.l); });
     ins.forEach((o) => { html += line('added', `<ins>${esc(o.l)}</ins>`, o.l); });
+    return html;
   }
+
+  // R\u00f3wne liczby linii: parowanie po kolejno\u015bci (do 3 par word-diffem),
+  // wi\u0119ksze bloki zostaj\u0105 czytelne jako osobne linie (jak dotychczas).
+  if (dels.length === ins.length) {
+    if (dels.length <= 3) {
+      for (let p = 0; p < dels.length; p++) {
+        html += line('changed', renderInline(dels[p].l, ins[p].l), dels[p].l);
+      }
+    } else {
+      dels.forEach((o) => { html += line('removed', `<del>${esc(o.l)}</del>`, o.l); });
+      ins.forEach((o) => { html += line('added', `<ins>${esc(o.l)}</ins>`, o.l); });
+    }
+    return html;
+  }
+
+  // R\u00f3\u017cne liczby linii (audyt): sparuj podobne linie s\u0142owo w s\u0142owo,
+  // reszt\u0119 poka\u017c jako zwyk\u0142e usuni\u0119te/dodane.
+  const { pairs, restDel, restIns } = pairChangedLines(dels, ins);
+  if (pairs.length) {
+    for (const pr of pairs) {
+      html += line('changed', renderInline(pr.del.l, pr.ins.l), pr.del.l);
+    }
+    restDel.forEach((o) => { html += line('removed', `<del>${esc(o.l)}</del>`, o.l); });
+    restIns.forEach((o) => { html += line('added', `<ins>${esc(o.l)}</ins>`, o.l); });
+    return html;
+  }
+
+  dels.forEach((o) => { html += line('removed', `<del>${esc(o.l)}</del>`, o.l); });
+  ins.forEach((o) => { html += line('added', `<ins>${esc(o.l)}</ins>`, o.l); });
   return html;
 }
 // Renderuje diff ze zwijaniem: zwraca { html, skipped, added, removed }.
@@ -235,7 +266,25 @@ function wireSkipToggle(box, skipped) {
 async function main() {
   const siteId = decodeURIComponent(location.hash.slice(1));
   const { sites, language, theme } = await chrome.storage.local.get(['sites', 'language', 'theme']);
-  const t = language === 'pl' ? STR.pl : STR.en;
+  // Audyt: tlumaczenia z i18n.js (klucze diff*); alias mapuje je na krotkie
+  // nazwy uzywane nizej, zeby reszta pliku nie wymagala przepisywania.
+  const T = TRANSLATIONS[language === 'pl' ? 'pl' : 'en'];
+  const t = {
+    title: T.diffTitle,
+    openPage: T.diffOpenPage,
+    siteNotFound: T.diffSiteNotFound,
+    noVersionYet: T.diffNoVersionYet,
+    onlyCurrent: T.diffOnlyCurrent,
+    noChanges: T.diffNoChanges,
+    monitoredUrl: T.diffMonitoredUrl,
+    skipLines: T.diffSkipLines,
+    skipTitle: T.diffSkipTitle,
+    added: T.diffAdded,
+    removed: T.diffRemoved,
+    onlyChanges: T.diffOnlyChanges,
+    diffSimplified: T.diffSimplified,
+    statsReplaced: T.diffStatsReplaced
+  };
 
   document.documentElement.lang = language === 'pl' ? 'pl' : 'en';
   document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';

@@ -72,11 +72,16 @@ function errorLabel(raw, t) {
   return msg.length > 40 ? msg.slice(0, 40) + '\u2026' : (msg || t.checkError);
 }
 
-// Custom interval label: "15 min", "3 hr", "2 d" (PL: "3 godz", "2 dn.").
+// Custom interval label: "15 min", "3 hr", "2 d" (PL: "3 godz.", "2 dn.").
+// Audyt: jednolita forma "godz." (z kropka) tez na karcie; EN "hr"/"hrs".
 function formatInterval(minutes) {
   const pl = currentLang === 'pl';
   if (minutes % 1440 === 0) return `${minutes / 1440} ${pl ? 'dn.' : 'd'}`;
-  if (minutes % 60 === 0) return `${minutes / 60} ${pl ? 'godz' : 'hr'}`;
+  if (minutes % 60 === 0) {
+    const h = minutes / 60;
+    if (pl) return `${h} godz.`;
+    return h === 1 ? '1 hr' : `${h} hrs`;
+  }
   return `${minutes} min`;
 }
 
@@ -120,9 +125,20 @@ function buildCard(site, flash = null) {
   const isChecking = checkingIds.has(site.id);
   const refreshDisabled = site.isPaused || isChecking;
 
+  // Audyt a11y: aria-label karty oglaszal tylko nazwe - czytnik ekranu nie
+  // slyszal mety (odstep, ostatnie sprawdzenie, NOWE, bledu). Label =
+  // nazwa + te same informacje, ktore widza widzacy.
+  const ariaParts = [labelFreq];
+  if (site.isPaused) ariaParts.push(t.badgePaused);
+  if (site.hasChanged) ariaParts.push(t.badgeNew);
+  if (site.lastError) ariaParts.push(errorLabel(site.lastError, t));
+  if (site.suggestRendered) ariaParts.push(t.suggestRendered);
+  ariaParts.push(`${t.lastCheck}: ${lastCheck}`);
+  const ariaLabel = `${escapeHtml(site.name)}. ${escapeHtml(ariaParts.join(', '))}`;
+
   card.innerHTML = `
     <button type="button" class="drag-handle" title="${t.titleDrag}" aria-label="${t.titleDrag}"><svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="3.5" r="1.7"/><circle cx="10" cy="3.5" r="1.7"/><circle cx="4" cy="9" r="1.7"/><circle cx="10" cy="9" r="1.7"/><circle cx="4" cy="14.5" r="1.7"/><circle cx="10" cy="14.5" r="1.7"/></svg></button>
-    <div class="site-info" tabindex="0" role="button" aria-label="${escapeHtml(site.name)}">
+    <div class="site-info" tabindex="0" role="button" aria-label="${ariaLabel}">
       <div class="site-name" title="${escapeHtml(site.name)}"><img class="site-favicon" src="${faviconUrl(site.url, 32)}" width="18" height="18" alt="" aria-hidden="true">${escapeHtml(site.name)}${pausedBadge}${badgeHtml}</div>
       <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${errorHtml}${flashHtml}${suggestHtml}${diffHtml}</div>
     </div>
@@ -131,6 +147,11 @@ function buildCard(site, flash = null) {
       <button class="btn-icon btn-toggle" title="${t.titleToggle}" aria-label="${t.titleToggle}">${site.isPaused ? ICONS.play : ICONS.pause}</button>
       <button class="btn-icon btn-edit" title="${t.titleEditBtn}" aria-label="${t.titleEditBtn}">${ICONS.edit}</button>
       <button class="btn-icon btn-delete" title="${t.titleDeleteBtn}" aria-label="${t.titleDeleteBtn}">${ICONS.trash}</button>
+    </div>
+    <div class="delete-confirm" hidden>
+      <span class="dc-title">${t.deleteConfirmTitle}</span>
+      <button type="button" class="btn-danger dc-yes" data-i18n="btnDeleteYes">${t.btnDeleteYes}</button>
+      <button type="button" class="btn-secondary dc-no" data-i18n="btnCancel">${t.btnCancel}</button>
     </div>
   `;
 
@@ -164,12 +185,38 @@ function buildCard(site, flash = null) {
 
   card.querySelector('.btn-edit').addEventListener('click', (e) => {
     e.stopPropagation();
-    showForm(site);
+    // Audyt UX#2: edycja otwiera sie w karcie przegladarki (formularz
+    // nie miescil sie w popupie), nie w widoku popupu.
+    openEditTab(site.id);
   });
 
   card.querySelector('.btn-delete').addEventListener('click', (e) => {
     e.stopPropagation();
-    deleteSite(site.id); // no confirm step: the Undo summary covers mistakes
+    // Audyt: potwierdzenie usuwania NA SAMEJ KARCIE - poprzednio pojawialo
+    // sie w stopce (daleko od kafelka), a "Usun" i "Anuluj" wygladaly
+    // identycznie. Czerwony "Usun" + neutralne "Anuluj"; Cofnij w
+    // podsumowaniu pokrywa omylkowe potwierdzenie.
+    card.classList.add('confirming');
+    const actionsRow = card.querySelector('.actions');
+    const confirmRow = card.querySelector('.delete-confirm');
+    if (actionsRow) actionsRow.hidden = true;
+    if (confirmRow) {
+      confirmRow.hidden = false;
+      const yes = confirmRow.querySelector('.dc-yes');
+      if (yes) yes.focus();
+    }
+  });
+  card.querySelector('.dc-yes').addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteSite(site.id);
+  });
+  card.querySelector('.dc-no').addEventListener('click', (e) => {
+    e.stopPropagation();
+    card.classList.remove('confirming');
+    const confirmRow = card.querySelector('.delete-confirm');
+    const actionsRow = card.querySelector('.actions');
+    if (confirmRow) confirmRow.hidden = true;
+    if (actionsRow) actionsRow.hidden = false;
   });
 
   const diffEl = card.querySelector('.link-diff');
@@ -228,6 +275,9 @@ async function renderSites() {
   const data = await chrome.storage.local.get(['sites', 'groups', 'groupTipDone']);
   const sites = data.sites || [];
   const groups = data.groups || [];
+  // Audyt: licznik CALKOWITY (tez pauzowane) dla wygaszania "Oznacz jako
+  // przeczytane" w pustym stanie (zob. updateRefreshAllButton).
+  totalSiteCount = sites.length;
   // The drag tip is only needed until the user has discovered grouping.
   groupTipDone = Boolean(data.groupTipDone) || groups.length > 0;
 
