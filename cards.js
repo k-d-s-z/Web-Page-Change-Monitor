@@ -91,7 +91,11 @@ function buildCard(site, flash = null) {
   card.className = `site-card ${site.isPaused ? 'paused' : ''}`;
   card.dataset.id = site.id;
   card.dataset.name = site.name;
-  card.tabIndex = 0;
+  // Audyt#2/ust.8: JEDEN przystanek Tab na karte (.site-info).
+  // Przyciski (uchwyt + 4 ikony) wychodza z kolejnosci Tab (tabindex="-1");
+  // strzalki <-/-> wchodza w rzad przyciskow i po nim wedruja, Esc wraca
+  // na karte. Bez tego 8 stron = 75 przystankow Tab. ↑/↓ (drag.js) bez zmian.
+  const ROVING_OFF = ' tabindex="-1"';
 
   const labelFreq = site.freqMinutes ? formatInterval(site.freqMinutes) : (t.freqLabels[site.freqIndex] || t.freqLabels[0]);
   // U4: pauza widoczna teÅ¼ tekstowo, nie tylko przez opacity.
@@ -99,10 +103,11 @@ function buildCard(site, flash = null) {
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
   const lastCheck = site.lastCheckTime ? formatLastCheck(site.lastCheckTime) : '&mdash;';
 
-  // Short, human-readable reason right on the card; the raw message stays in
-  // the tooltip for debugging.
+  // Audyt#2/drobiazgi: blad w OSOBNEJ linii pod meta (przy bladzie +
+  // podpowiedzi JS meta zawijala sie do 3 linii i zmieniala wysokosc
+  // karty). Krotki, czytelny powod; surowa tresc w tooltipie.
   const errorHtml = site.lastError
-    ? ` &bull; <span class="meta-error" title="${escapeHtml(site.lastError)}">${ICONS.warning} ${escapeHtml(errorLabel(site.lastError, t))}</span>`
+    ? `<div class="site-error-line"><span class="meta-error" title="${escapeHtml(site.lastError)}">${ICONS.warning} ${escapeHtml(errorLabel(site.lastError, t))}</span></div>`
     : '';
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
@@ -113,7 +118,7 @@ function buildCard(site, flash = null) {
   // Heuristic flag: the page shell is large but readable text is tiny ->
   // suggest switching to rendered mode (JS draws the content).
   const suggestHtml = site.suggestRendered
-    ? ` &bull; <span class="badge-suggest">${t.suggestRendered}</span>`
+    ? ` &bull; <span class="badge-suggest" title="${escapeHtml(t.suggestRendered)}">${t.suggestRenderedShort}</span>`
     : '';
   // The link stays as long as a stored previous version exists (not only while
   // the change is unread) - opening the page must not remove access to the diff.
@@ -137,16 +142,17 @@ function buildCard(site, flash = null) {
   const ariaLabel = `${escapeHtml(site.name)}. ${escapeHtml(ariaParts.join(', '))}`;
 
   card.innerHTML = `
-    <button type="button" class="drag-handle" title="${t.titleDrag}" aria-label="${t.titleDrag}"><svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="3.5" r="1.7"/><circle cx="10" cy="3.5" r="1.7"/><circle cx="4" cy="9" r="1.7"/><circle cx="10" cy="9" r="1.7"/><circle cx="4" cy="14.5" r="1.7"/><circle cx="10" cy="14.5" r="1.7"/></svg></button>
+    <button type="button" class="drag-handle"${ROVING_OFF} title="${t.titleDrag}" aria-label="${t.titleDrag}"><svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="3.5" r="1.7"/><circle cx="10" cy="3.5" r="1.7"/><circle cx="4" cy="9" r="1.7"/><circle cx="10" cy="9" r="1.7"/><circle cx="4" cy="14.5" r="1.7"/><circle cx="10" cy="14.5" r="1.7"/></svg></button>
     <div class="site-info" tabindex="0" role="button" aria-label="${ariaLabel}">
       <div class="site-name" title="${escapeHtml(site.name)}"><img class="site-favicon" src="${faviconUrl(site.url, 32)}" width="18" height="18" alt="" aria-hidden="true">${escapeHtml(site.name)}${pausedBadge}${badgeHtml}</div>
-      <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${errorHtml}${flashHtml}${suggestHtml}${diffHtml}</div>
+      <div class="site-meta">${labelFreq} &bull; ${t.lastCheck}: ${lastCheck}${flashHtml}${suggestHtml}${diffHtml}</div>
+      ${errorHtml}
     </div>
     <div class="actions">
-      <button class="btn-icon btn-refresh${isChecking ? ' spinning' : ''}" title="${t.titleRefresh}" aria-label="${t.titleRefresh}"${refreshDisabled ? ' disabled' : ''}><span class="icon">${ICONS.refresh}</span></button>
-      <button class="btn-icon btn-toggle" title="${t.titleToggle}" aria-label="${t.titleToggle}">${site.isPaused ? ICONS.play : ICONS.pause}</button>
-      <button class="btn-icon btn-edit" title="${t.titleEditBtn}" aria-label="${t.titleEditBtn}">${ICONS.edit}</button>
-      <button class="btn-icon btn-delete" title="${t.titleDeleteBtn}" aria-label="${t.titleDeleteBtn}">${ICONS.trash}</button>
+      <button class="btn-icon btn-refresh${isChecking ? ' spinning' : ''}"${ROVING_OFF} title="${t.titleRefresh}" aria-label="${t.titleRefresh}"${refreshDisabled ? ' disabled' : ''}><span class="icon">${ICONS.refresh}</span></button>
+      <button class="btn-icon btn-toggle"${ROVING_OFF} title="${site.isPaused ? t.titleResume : t.titlePause}" aria-label="${site.isPaused ? t.titleResume : t.titlePause}">${site.isPaused ? ICONS.play : ICONS.pause}</button>
+      <button class="btn-icon btn-edit"${ROVING_OFF} title="${t.titleEditBtn}" aria-label="${t.titleEditBtn}">${ICONS.edit}</button>
+      <button class="btn-icon btn-delete"${ROVING_OFF} title="${t.titleDeleteBtn}" aria-label="${t.titleDeleteBtn}">${ICONS.trash}</button>
     </div>
     <div class="delete-confirm" hidden>
       <span class="dc-title">${t.deleteConfirmTitle}</span>
@@ -164,7 +170,7 @@ function buildCard(site, flash = null) {
 
   const favIcon = card.querySelector('.site-favicon');
   if (favIcon) {
-    favIcon.addEventListener('error', () => { favIcon.style.visibility = 'hidden'; }, { once: true });
+    favIcon.addEventListener('error', () => { favIcon.style.display = 'none'; }, { once: true });
   }
 
   card.querySelector('.site-info').addEventListener('click', async () => {
@@ -229,6 +235,49 @@ function buildCard(site, flash = null) {
   });
 
   card.addEventListener('keydown', onCardKeyDown);
+
+  // Audyt#2/ust.8: roaming po przyciskach karty. Tab ląduje tylko na
+  // .site-info; ←/→ wchodzą w rząd przycisków (uchwyt + 4 ikony) i po nim
+  // krążą (pomijając disabled), Esc wraca na kartę. Potwierdzenie usuwania
+  // (dc-yes/dc-no) zostaje w naturalnej kolejności — fokus i tak trafia
+  // tam programowo, a akcje Usuń/Anuluj muszą być dostepne klawiszem.
+  const infoEl = card.querySelector('.site-info');
+  const rovingBtns = () => Array.from(
+    card.querySelectorAll('.drag-handle, .actions .btn-icon')
+  ).filter((b) => !b.disabled && b.offsetParent !== null);
+  const focusInfo = () => infoEl.focus();
+
+  card.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Escape') return;
+    // Nie wchodzimy w rząd, gdy otwarte jest potwierdzenie usuwania
+    // (wtedy klawiatura obsługuję wyłącznie Usuń/Anuluj).
+    if (!card.querySelector('.delete-confirm').hidden) return;
+    const btns = rovingBtns();
+    if (!btns.length) return;
+    const idx = btns.indexOf(document.activeElement);
+
+    if (e.key === 'Escape') {
+      if (idx !== -1) { e.preventDefault(); focusInfo(); }
+      return;
+    }
+    const fwd = e.key === 'ArrowRight';
+    if (idx === -1) {
+      // Fokus na .site-info (lub poza przyciskami): wchodzimy od krawędzi.
+      if (fwd || !infoEl.contains(document.activeElement)) {
+        e.preventDefault();
+        btns[fwd ? 0 : btns.length - 1].focus();
+      }
+      return;
+    }
+    e.preventDefault();
+    const next = (idx + (fwd ? 1 : -1) + btns.length) % btns.length;
+    if (next === (fwd ? 0 : btns.length - 1)) {
+      // Pełne koło: wracamy na kartę zamiast krążyć w nieskończoność.
+      focusInfo();
+    } else {
+      btns[next].focus();
+    }
+  });
 
   // A1: Enter/Spacja na karcie (na .site-info) otwiera âotwieranÄ stronÄ"
   // â dotÄd obsÅuga klawiatury koÅczyÅa siÄ na strzaÅkach z drag.js.

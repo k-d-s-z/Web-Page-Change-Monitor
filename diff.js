@@ -269,6 +269,9 @@ async function main() {
   // Audyt: tlumaczenia z i18n.js (klucze diff*); alias mapuje je na krotkie
   // nazwy uzywane nizej, zeby reszta pliku nie wymagala przepisywania.
   const T = TRANSLATIONS[language === 'pl' ? 'pl' : 'en'];
+  // Audyt#2/ust.6: format daty zgodny z jezykiem interfejsu (jak w cards.js),
+  // zamiast domyslnego "10/22/2026, 6:17:30 AM" przy polskim UI.
+  const locale = language === 'pl' ? 'pl-PL' : 'en-US';
   const t = {
     title: T.diffTitle,
     openPage: T.diffOpenPage,
@@ -309,7 +312,7 @@ async function main() {
 
   document.getElementById('title').textContent = site.name;
   let metaText = site.changedAt
-    ? `${new Date(site.changedAt).toLocaleString()} \u2022 ${openUrl}`
+    ? `${new Date(site.changedAt).toLocaleString(locale)} \u2022 ${openUrl}`
     : openUrl;
   if (openUrl !== site.url) metaText += ` \u2022 ${t.monitoredUrl}: ${site.url}`;
   document.getElementById('meta').textContent = metaText;
@@ -349,7 +352,9 @@ async function main() {
 
   const onlyEl = document.getElementById('only-changes');
   if (onlyEl) {
-    onlyEl.checked = true; // default view: only changed lines
+    // Audyt#2/ust.6: domyslnie PELNY widok (3 linie kontekstu wokol zmian),
+    // a nie same zmienione linie - zmiana bez kontekstu jest nieczytelna.
+    onlyEl.checked = false;
     onlyEl.addEventListener('change', () => render(onlyEl.checked));
   }
   render(onlyEl ? onlyEl.checked : false);

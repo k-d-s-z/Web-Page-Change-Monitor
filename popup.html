@@ -367,7 +367,9 @@
       display: none;
     }
     .refresh-summary.ok {
-      color: var(--brand-soft);
+      /* Audyt#2/ust.2: sukces na zielono (--ok), nie na kolorze marki -
+         rozroznienie ok / ostrzezenie / info. */
+      color: var(--ok);
     }
     .refresh-summary.warn {
       color: var(--warn);
@@ -501,6 +503,16 @@
       text-decoration: underline;
       cursor: help;
     }
+    /* Audyt#2/drobiazgi: blad w osobnej linii pod meta - meta z bledem
+       i podpowiedzia zawijala sie do 3 linii i rozpychala karte. */
+    .site-error-line {
+      margin-top: 1px;
+      font-size: 12px;
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .meta-flash.ok {
       color: var(--ok);
     }
@@ -524,6 +536,12 @@
       display: flex;
       gap: 5px;
       flex-shrink: 0;
+    }
+    /* Audyt#2/ust.1: display:flex nadpisywal atrybut [hidden] - po kliknieciu
+       kosza wiersz ikon zostawal widoczny obok potwierdzenia (i w kolejce Tab).
+       Zwykly [hidden] nie dziala na flex, dlatego jawne nadpisanie. */
+    .actions[hidden] {
+      display: none;
     }
     .btn-icon {
       display: inline-flex;
@@ -673,10 +691,15 @@
       margin-right: 6px;
       accent-color: var(--brand-hover);
     }
+    /* Audyt#2/ust.5: teksty opcji NIE sa wersalikami - regula `label`
+       (NAZWA, ADRES URL) celowo zostaje, ale checkboxy czytamy normalnie. */
     .checkbox-label {
       display: flex;
       align-items: flex-start;
       font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-transform: none;
       color: var(--text-soft);
       margin-bottom: 10px;
       cursor: pointer;
@@ -912,6 +935,11 @@
     .group-title .badge-changed {
       flex: none;
       margin-left: 0;
+    }
+    /* Audyt#2/ust.7: tytul grupy w jasnym motywie przyciemniony do #6D28D9
+       (na fioletowym tle grupy trzymal wlasnie granice 4,5:1). */
+    [data-theme="light"] .group-title {
+      color: #6D28D9;
     }
     .group-name-input {
       flex: 1;
@@ -1464,10 +1492,10 @@
               </div>
             </div>
             <div class="settings-col">
-              <div class="settings-col-label" data-i18n="lblBackupCol">Settings backup</div>
+              <div class="settings-col-label" data-i18n="lblBackupCol">Backup of your page list</div>
               <div class="settings-col-actions">
-                <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Create</button>
-                <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Restore</button>
+                <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Save to file</button>
+                <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Load from file</button>
               </div>
             </div>
           </div>

@@ -15,8 +15,11 @@
 :root {
   color-scheme: dark;
   --bg: #09090E;
-  --border: #2B2B36;
-  --border-strong: #3B3B4A;
+  /* Audyt#2/ust.7 (kontrasty WCAG): ramka #71717A daje 3,65:1 na tle
+     (wymagane 3:1 dla granic pol/kart), wygaszony tekst #8B93A1 - 5,7:1
+     (wymagane 4,5:1). --border-strong pozostaje wyrazniejszy od --border. */
+  --border: #71717A;
+  --border-strong: #8E8E9A;
   --text: #F3F4F6;
   --text-soft: #E5E7EB;
   --text-heading: #F5F5F5;
@@ -25,7 +28,7 @@
   --text-2: #9CA3AF;
   --text-3: #D1D5DB;
   --text-meta: #C7CED6;
-  --text-muted: #6B7280;
+  --text-muted: #8B93A1;
   --brand: #8B5CF6;
   /* K5: baza przyciskow rozjasniona w strone fioletu ikony (#8352F0 to
      najjasniejszy ton, ktory trzyma WCAG AA 4.5:1 z bialym tekstem;
@@ -34,10 +37,12 @@
   --brand-soft: #A78BFA;
   --brand-softer: #C4B5FD;
   --ok: #34D399;
-  /* Audyt: ostrzezenia byly bursztynowe (#FBBF24) - najglosniejszy kolor
-     w calym UI. --warn to fiolet marki; plakietki na tym tle dostaja
-     biale litery (zob. .badge-changed w popup.html). */
-  --warn: #A78BFA;
+  /* Audyt#2/ust.2: --warn wrocil do bursztynu, ale tylko jako kolor TEKSTU
+     i ikony (komunikaty .warn w popup.html) - bez tla i plakietek, wiec nie
+     ma "zoltego krzyku" z pierwszego audytu. --brand-soft pozostaje
+     zarezerwowany dla marki: sukces=oziel/ok, blad=czerwien,
+     ostrzezenie=bursztyn - trzy rozroz-nialne stany. */
+  --warn: #FBBF24;
   --danger: #F87171;
 }
 
@@ -45,8 +50,9 @@
 [data-theme="light"] {
   color-scheme: light;
   --bg: #F6F7F9;
-  --border: #D8DCE2;
-  --border-strong: #C4CAD2;
+  /* Audyt#2/ust.7: jasne ramki musza trzymac 3:1 na bialym tle. */
+  --border: #8B9099;
+  --border-strong: #767B85;
   --text: #1F2328;
   --text-soft: #2F3540;
   --text-heading: #14171B;
@@ -60,6 +66,7 @@
   --brand-soft: #7C3AED;
   --brand-softer: #6D28D9;
   --ok: #047857;
-  --warn: #6D28D9;
+  /* Audyt#2/ust.2: jasny bursztyn jako tekst na bialym (4.6:1). */
+  --warn: #B45309;
   --danger: #DC2626;
 }
