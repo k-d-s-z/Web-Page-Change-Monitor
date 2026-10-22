@@ -89,6 +89,41 @@ function endWizard() {
   clearWizardDraft();
 }
 
+// Regresja "zgoda po Anuluj" (tryb karty): endWizard usuwal draft
+// fire-and-forget i karta natychmiast sie zamykala - zapis mogl nie dojsc
+// do procesu przegladarki, a wtedy draft ZYL dalej, zamiatacz w tle
+// (cleanupAbandonedWizard) widzial "zywy kreator" i celowo NIE zwalnial
+// przyznanego originu. W trybie KARTY nie ma wyscigu teardownu: karta
+// konczy prace pod kontrola, wiec zwalniamy zgode DETERMINISTYCZNIE przed
+// zamknieciem. Zwalniamy tylko origin, o ktory KREATOR prosil w TYM
+// przebiegu (marker pendingWizardOrigin ustawiany przed okienkiem zgody)
+// i ktory nie jest uzyty przez zadna zapisana strone. Marker znika po
+// udanym zwolnieniu; przy bledzie zostaje - zamiatacz (alarm 1 min)
+// zostaje bezpiecznikiem, jak dotychczas.
+async function releaseWizardOriginOnCancel() {
+  try {
+    const data = await chrome.storage.local.get(['pendingWizardOrigin', 'sites']);
+    const pattern = data.pendingWizardOrigin;
+    if (!pattern) return; // ten przebieg kreatora nie prosil o nowa zgode
+    const inUse = (data.sites || []).some((x) => {
+      try {
+        const u = new URL(x.url);
+        return `${u.protocol}//${u.host}/*` === pattern;
+      } catch (e) { return false; }
+    });
+    if (inUse) {
+      // Origin uzywa inna zapisana strona - zgoda zostaje (poprawnie),
+      // marker znika, zeby zamiatacz nie probowal jej zdjac.
+      await chrome.storage.local.remove('pendingWizardOrigin');
+      return;
+    }
+    await chrome.permissions.remove({ origins: [pattern] });
+    await chrome.storage.local.remove('pendingWizardOrigin');
+  } catch (err) {
+    // Best-effort: marker zostaje, zamiatacz w tle dopelnije sprzatanie.
+  }
+}
+
 // Whole wizard state survives a popup restart (e.g. the permission dialog
 // closing the popup mid-flight).
 function saveWizardDraft() {
@@ -693,11 +728,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // (as it sometimes does during popup teardown or a race), the marker
     // pendingWizardOrigin stays behind as the background's worklist and the
     // sweeper + 1-minute alarm guarantee the release anyway.
-    endWizard();
+    // W TRYBIE KARTY jest inaczej (regresja "zgoda po Anuluj"): karta nie
+    // jest zrywana przy zamknieciu, wiec najpierw DOKLADNIE sprzatamy
+    // (usuniecie draftu + zwolnienie zgody czekamy na potwierdzenie), a
+    // dopiero potem zamykamy karte. Zamiatacz w tle zostaje bezpiecznikiem.
     if (WIZARD_TAB_MODE) {
+      endWizard();
+      try { await chrome.storage.local.remove('wizardDraft'); } catch (err) { /* noop */ }
+      await releaseWizardOriginOnCancel();
       await closeWizardTab();
       return;
     }
+    endWizard();
     await showList();
   });
   document.getElementById('wizard-pick').addEventListener('click', wizardPick);

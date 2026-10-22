@@ -135,7 +135,7 @@ const HANDLERS = {
     if (result.status !== 'busy') await updateBadge();
     return result;
   },
-  checkSites: async (msg) => checkSpecificSites(msg.siteIds),
+  checkSites: (msg) => checkSpecificSites(msg.siteIds),
   saveSite: (msg) => handleSaveSite(msg),
   toggleSite: (msg) => handleToggleSite(msg),
   deleteSite: (msg) => handleDeleteSite(msg),
@@ -1633,7 +1633,7 @@ async function handleStartPicker(msg, sender) {
 // (Chrome 127+; wymaga sfokusowanego okna przegladarki, wiec wywolujacy
 // odczekuje chwile przed nim), potem popup.html jako male okno (ta sama
 // strona rozszerzenia - kreator/popup wznawia sie w nim tak samo), a na
-// koncu powiadomienie proszace o klikniecie ikony.
+// koniec powiadomienie proszace o klikniecie ikony.
 // Znajduje karte kreatora (popup.html?wizard=1). UWAGA: tabs.query z filtrem
 // url (match pattern) notorycznie zawodzi dla wlasnych stron chrome-extension,
 // dlatego: (1) chrome.runtime.getContexts (contextId JEST tabId karty), (2)
@@ -1865,6 +1865,16 @@ chrome.permissions.onAdded.addListener(async (permissions) => {
   if (!want || !Array.isArray(permissions.origins) || !permissions.origins.includes(want)) return;
 
   await chrome.storage.local.remove('resumeAfterPermission');
+
+  // Regresja "zgoda po Anuluj": ten listener czyta draft na starcie i po
+  // kilku awaitach zapisuje go z powrotem. Jesli uzytkownik zdazyl kliknac
+  // "Anuluj" w miedzyczasie (wizard usunal draft i zwolnil zgode), ten
+  // zapis by go WSKRZESIL ze swiezym ts - zamiatacz widzialby "zywy"
+  // kreator i trzymal zgode. Przed zapisem sprawdzamy draft NA NOWO:
+  // zniknal = kreator skonczone/anulowane, nie wskrzeszamy.
+  const cur = (await chrome.storage.local.get('wizardDraft')).wizardDraft;
+  if (!cur || !cur.url || !cur.pendingPermission) return;
+
   draft.permissionGranted = true;
   draft.ts = Date.now();
   await chrome.storage.local.set({ wizardDraft: draft });
