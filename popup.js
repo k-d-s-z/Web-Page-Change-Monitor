@@ -83,6 +83,23 @@ async function focusWizardTab() {
 // Otwiera karte kreatora (albo aktywuje juz istniejaca - nigdy drugiej).
 // prefill do ZYWEJ karty idzie przez runtime message, do nowej - przez storage
 // (wizardPrefill), bo nowa karta czyta go w swoim DOMContentLoaded.
+// Leniwe ladowanie wizard.js: LISTA (glowna sciezka popupu) wcale go nie
+// uzywa - do tej pory ~33 KB skryptu kreatora parsowalo sie przy KAZDYM
+// otwarciu popupu. Karta kreatora (?wizard=1) dolacza skrypt tu, ZANIM
+// odpali startWizard/maybeRestoreWizard (funkcje zyja jako globalne dopiero
+// po zaladowaniu). Dynamiczny <script> moze wykonac sie po DOMContentLoaded,
+// dlatego wizard.js ma wlasny fail-safe na document.readyState.
+async function ensureWizardScript() {
+  if (document.querySelector('script[src="wizard.js"]')) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'wizard.js';
+    s.onload = () => resolve(undefined);
+    s.onerror = () => reject(new Error('wizard.js load failed'));
+    document.body.appendChild(s);
+  });
+}
+
 async function openWizardTab(prefill) {
   try {
     const data = (prefill && (prefill.url || prefill.name)) ? prefill : null;
@@ -99,6 +116,8 @@ async function openWizardTab(prefill) {
     await chrome.tabs.create({ url: WIZARD_TAB_URL });
   } catch (err) {
     // Awaryjnie (brak tabs API): kreator w popupie - stare przeplywy wciaz dzialaja.
+    // W liscie wizard.js nie jest parsowany - dolaczamy go tu leniwie.
+    await ensureWizardScript();
     startWizard(prefill || null);
   }
 }
@@ -215,6 +234,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // (maybeRestoreWizard) albo z prefillem (przycisk "+", menu kontekstowe,
     // message z innego kontekstu). Lista stron tu nie wystepuje.
     // Audyt: tytul karty zamiast surowego adresu rozszerzenia.
+    // Wymaga leniwie dolaczonego wizard.js (funkcje kreatora sa globalne
+    // dopiero po jego zaladowaniu; w liscie ten skrypt nie jest parsowany).
+    try { await ensureWizardScript(); } catch (err) { /* bez kreatora tab nie ma sensu */ }
     document.title = TRANSLATIONS[currentLang].wizTitle;
     const pre = await chrome.storage.local.get('wizardPrefill');
     const prefill = pre.wizardPrefill;

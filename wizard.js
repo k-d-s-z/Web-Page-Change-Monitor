@@ -712,7 +712,7 @@ function setLoginAnswer(requireCookies) {
   syncLoginButtons(requireCookies);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function initWizardUi() {
   document.getElementById('wizard-next').addEventListener('click', wizardNext);
   document.getElementById('wizard-back').addEventListener('click', wizardBack);
   // Audyt: krok 4 odpowiada na pytanie o logowanie przyciskami Tak/Nie
@@ -801,4 +801,13 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(async () => {
     if (WIZARD_TAB_MODE && !wizardState) await maybeRestoreWizard();
   }, 250);
-});
+}
+
+// Leniwe ladowanie (popup.js dolacza ten skrypt DYNAMICZNIE dopiero w karcie
+// kreatora - lista go nie parsuje): dynamiczny <script> moze wykonac sie po
+// DOMContentLoaded, wiec init odpalamy od razu, gdy dokument juz jest gotowy.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initWizardUi);
+} else {
+  initWizardUi();
+}

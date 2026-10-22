@@ -513,7 +513,14 @@ async function ensureOffscreen() {
 
 async function extractFragment(html, selector) {
   await ensureOffscreen();
-  const res = await chrome.runtime.sendMessage({ target: 'offscreen', action: 'extractFragment', html, selector });
+  // Optymalizacja IPC: komentarze, <style> i <noscript> to elementy, ktorych
+  // selektor nieledwowalnie nie wskazuje (picker nigdy ich nie wybiera), a
+  // bywaja dziesiatkami procent objtosci strony. Zdejmujemy je LINIOWO
+  // (istniejace funkcje) przed kopia strukturalna przez runtime.sendMessage -
+  // <script> zostaje celowo, bo reczny selektor moze wskazywac np.
+  // <script type="application/ld+json"> na monitorowanym endpointcie.
+  const trimmed = removeRawTextBlocks(removeComments(html));
+  const res = await chrome.runtime.sendMessage({ target: 'offscreen', action: 'extractFragment', html: trimmed, selector });
   if (!res || !res.ok) throw new Error('Invalid selector');
   if (!res.found) throw new Error('Selector not found in page source (JS-drawn content? enable rendered mode)');
   return res.html;
