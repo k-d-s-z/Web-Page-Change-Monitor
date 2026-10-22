@@ -114,10 +114,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 const HANDLERS = {
-  updateAlarms: async () => {
-    await setupAlarms();
-    return { status: 'ok' };
-  },
   updateBadge: async () => {
     await updateBadge();
     return { status: 'ok' };
@@ -143,7 +139,6 @@ const HANDLERS = {
   markAllRead: async () => handleMarkAllRead(),
   reorderSites: (msg) => handleReorderSites(msg),
   updateGroup: (msg) => handleUpdateGroup(msg),
-  ungroup: (msg) => handleUngroup(msg),
   markSitesRead: (msg) => handleMarkSitesRead(msg),
   checkAll: () => checkAllSites(),
   importSites: (msg) => handleImportSites(msg),
@@ -1473,19 +1468,6 @@ async function handleUpdateGroup(msg) {
     if (typeof msg.name === 'string' && msg.name.trim()) g.name = cleanGroupName(msg.name);
     if (typeof msg.collapsed === 'boolean') g.collapsed = msg.collapsed;
     await chrome.storage.local.set({ groups });
-  });
-  return { ok: true };
-}
-
-// Removes the group only; its pages stay in place on the list.
-async function handleUngroup(msg) {
-  const id = String((msg && msg.id) || '');
-  await withStorageLock(async () => {
-    const data = await chrome.storage.local.get(['sites', 'groups']);
-    const sites = data.sites || [];
-    sites.forEach((s) => { if (s.groupId === id) s.groupId = null; });
-    const groups = (data.groups || []).filter((g) => g.id !== id);
-    await chrome.storage.local.set({ sites, groups });
   });
   return { ok: true };
 }

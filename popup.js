@@ -317,16 +317,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDragAndDrop(document.getElementById('sites-container'));
 });
 
-// Wrapper na chrome.runtime.sendMessage â nigdy nie rzuca; bÅÄd kanaÅu
-// zwracany jest jako { ok: false, error }, Å¼eby wywoÅujÄcy mÃ³gÅ go obsÅuÅ¼yÄ.
-async function callBackground(msg) {
-  try {
-    return await chrome.runtime.sendMessage(msg);
-  } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
-  }
-}
-
+// Tlumaczy wynik pojedynczego sprawdzenia (checkSite/checkNow) na tekst
+// podsumowania na karcie (kind: ok/warn -> kolor w .meta-flash).
 function flashFromResult(result) {
   const t = TRANSLATIONS[currentLang];
   switch (result && result.status) {
@@ -1215,76 +1207,6 @@ async function maybeRestoreEditDraft() {
   return true;
 }
 
-// --- SpÃ³jny system popoverÃ³w âiâ (dodatkowe wyjaÅnienia opcji) -----------
-// Jeden wspÃ³Ådzielony element #popover; treÅÄ brana w chwili otwarcia z
-// TRANSLATIONS[data-popover], wiÄc zmiana jÄzyka nie wymaga odÅwieÅ¼ania.
-const POPOVER_EL = document.getElementById('popover');
-let popoverOwner = null;
-
-function positionPopover(btn) {
-  POPOVER_EL.style.left = '0px';
-  POPOVER_EL.style.top = '0px';
-  POPOVER_EL.classList.add('show');
-  const btnRect = btn.getBoundingClientRect();
-  const popRect = POPOVER_EL.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  let left = btnRect.right + 8;
-  if (left + popRect.width > vw - 8) {
-    left = Math.max(8, btnRect.left - popRect.width - 8);
-  }
-  let top = btnRect.top - 4;
-  if (top + popRect.height > vh - 8) {
-    top = Math.max(8, vh - popRect.height - 8);
-  }
-  POPOVER_EL.style.left = `${Math.round(left)}px`;
-  POPOVER_EL.style.top = `${Math.round(top)}px`;
-}
-
-function hidePopover() {
-  if (!popoverOwner) return;
-  popoverOwner.setAttribute('aria-expanded', 'false');
-  popoverOwner = null;
-  POPOVER_EL.classList.remove('show');
-  POPOVER_EL.setAttribute('aria-hidden', 'true');
-  POPOVER_EL.textContent = '';
-}
-
-function togglePopover(btn) {
-  if (popoverOwner === btn) {
-    hidePopover();
-    return;
-  }
-  hidePopover();
-  const key = btn.getAttribute('data-popover');
-  const text = TRANSLATIONS[currentLang][key];
-  if (!text) return;
-  popoverOwner = btn;
-  POPOVER_EL.textContent = text;
-  POPOVER_EL.setAttribute('aria-hidden', 'false');
-  btn.setAttribute('aria-expanded', 'true');
-  positionPopover(btn);
-}
-
-document.querySelectorAll('.info-btn').forEach((btn) => {
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    togglePopover(btn);
-  });
-});
-
-// Klik poza popoverem i Escape go zamykajÄ (jak panel ustawieÅ).
-document.addEventListener('click', (e) => {
-  if (!popoverOwner) return;
-  if (popoverOwner.contains(e.target) || POPOVER_EL.contains(e.target)) return;
-  hidePopover();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && popoverOwner) {
-    e.stopPropagation();
-    hidePopover();
-  }
-});
 
 async function showList() {
   document.getElementById('view-form').style.display = 'none';

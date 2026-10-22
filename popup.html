@@ -707,9 +707,8 @@
     .checkbox-label input {
       margin-top: 2px;
     }
-    /* Checkbox + "i" popover button: label and the button are siblings,
-       so clicking "i" never toggles the checkbox (a button nested in
-       <label> would activate it). */
+    /* Checkbox row: the label is a flex child (full width), so any future
+       sibling button never shrinks the checkbox itself. */
     .checkbox-row {
       display: flex;
       align-items: flex-start;
@@ -721,10 +720,7 @@
       min-width: 0;
       margin-bottom: 0;
     }
-    .checkbox-row .info-btn {
-      margin-top: 1px;
-    }
-    /* Row: field label + "i" info button (opens a popover). */
+    /* Row: field label + its persistent hint below (field-hint). */
     .label-row {
       display: flex;
       align-items: center;
@@ -733,57 +729,6 @@
     }
     .label-row label {
       margin-bottom: 0;
-    }
-    /* "?" zamiast "i": wiekszy cel dotykowy i czytelnosc (18px bylo za
-       malo widoczne, ikona 17px wewnatrz 22px przycisku). */
-    .info-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      flex: none;
-      padding: 0;
-      background: transparent;
-      border: none;
-      border-radius: 50%;
-      color: var(--text-2);
-      cursor: pointer;
-      transition: color 0.2s ease;
-    }
-    .info-btn svg {
-      display: block;
-      pointer-events: none;
-    }
-    .info-btn:hover {
-      color: var(--brand-soft);
-    }
-    .info-btn:focus-visible {
-      outline: 2px solid var(--brand);
-      outline-offset: 1px;
-    }
-    .info-btn[aria-expanded="true"] {
-      color: var(--brand-soft);
-    }
-    /* Info popover: one shared element, filled with the i18n key named in
-       data-popover. Larger text (13px) for readability; closes on outside
-       click / Escape (popup.js). */
-    .popover {
-      position: absolute;
-      z-index: 30;
-      max-width: 330px;
-      background: var(--bg-soft);
-      border: 1px solid var(--border-strong);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 13px;
-      line-height: 1.5;
-      color: var(--text-soft);
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-      display: none;
-    }
-    .popover.show {
-      display: block;
     }
     .adv-section {
       display: grid;
@@ -1179,10 +1124,8 @@
     /* U2: dlugie etykiety (PL) zawijaja sie zamiast nakladac na ikone "i" */
     .label-row { display: flex; align-items: flex-start; gap: 6px; }
     .label-row label { white-space: normal; overflow: visible; }
-    .label-row .info-btn { flex: 0 0 auto; }
     .checkbox-row { display: flex; align-items: flex-start; gap: 6px; }
     .checkbox-row .checkbox-label span { white-space: normal; }
-    .checkbox-row .info-btn { flex: 0 0 auto; }
 
     /* === Karta kreatora (popup.html?wizard=1) - PELNY REDESIGN ===
        To nie jest popup: pelne okno przegladarki wymaga wlasnej typografii,
@@ -1719,9 +1662,6 @@
       <button type="button" id="btn-restore-done" class="btn-main" data-i18n="btnDone" style="display: none;">Done</button>
     </div>
   </div>
-
-  <!-- Shared info popover: filled by popup.js from TRANSLATIONS[data-popover]. -->
-  <div id="popover" class="popover" role="tooltip" aria-hidden="true"></div>
 
   <script src="i18n.js"></script>
   <script src="storage.js"></script>
