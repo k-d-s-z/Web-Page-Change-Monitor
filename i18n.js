@@ -170,7 +170,8 @@ const TRANSLATIONS = {
     emptyStateCta: 'Monitor your first page',
     emptyStateHint: 'Tip: you can also right-click any page and choose \u201cMonitor this page\u201d from the context menu.',
     groupHint: 'Tip: drag a card onto the middle of another page to group them together.',
-    freqLabels: ['1 min', '5 min', '10 min', '1 hr', '24 hrs'],    urlPlaceholder: 'e.g. https://news-site.com',
+    freqLabels: ['1 min', '5 min', '10 min', '1 hr', '24 hrs'],
+    urlPlaceholder: 'e.g. https://news-site.com',
     namePlaceholder: 'e.g. News / Store'
   },
   pl: {

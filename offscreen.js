@@ -12,7 +12,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try {
       el = doc.querySelector(String(msg.selector || ''));
     } catch (e) {
-      el = null;
+      // Audyt#3/poprawka3: niepoprawny skladniowo selektor to NIE to samo,
+      // co selektor niepasujacy. Rozrozniamy te dwa przypadki, zeby tlo
+      // pokazalo "Invalid selector" (i18n errSelectorInvalid) zamiast
+      // mylacego "Selector not found (JS-drawn content?)".
+      sendResponse({ ok: true, found: false, invalidSelector: true });
+      return false;
     }
     sendResponse({ ok: true, found: Boolean(el), html: el ? el.outerHTML : '' });
   } catch (e) {

@@ -8,10 +8,11 @@ function escapeHtml(str) {
   })[m]);
 }
 
-// Favicona przez wbudowane API chrome://favicon (uprawnienie "favicon" +
-// web_accessible_resources w manifeÅcie) â czyta z lokalnej pamiÄci
-// podrÄcznej przeglÄdarki, bez Å¼adnego zapytania do serwera strony czy
-// zewnÄtrznego serwisu (np. Google favicon service).
+// Favicona przez wbudowane API chrome://favicon (uprawnienie "favicon";
+// działa na stronach własnych rozszerzenia bez web_accessible_resources)
+// — czyta z lokalnej pamięci podręcznej przeglądarki, bez żadnego
+// zapytania do serwera strony czy zewnętrznego serwisu (np. Google
+// favicon service).
 function faviconUrl(pageUrl, size = 32) {
   const url = new URL(chrome.runtime.getURL('/_favicon/'));
   url.searchParams.set('pageUrl', pageUrl);
@@ -19,8 +20,8 @@ function faviconUrl(pageUrl, size = 32) {
   return url.toString();
 }
 
-// Jednolity zestaw ikon liniowych (stroke = currentColor), dziÄki czemu
-// kolor ikon wynika wyÅÄcznie z CSS i nie zaleÅ¼y od czcionki emoji systemu.
+// Jednolity zestaw ikon liniowych (stroke = currentColor), dzięki czemu
+// kolor ikon wynika wyłącznie z CSS i nie zależy od czcionki emoji systemu.
 const SVG_OPEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
 const ICONS = {
   refresh: `${SVG_OPEN}<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
@@ -31,9 +32,9 @@ const ICONS = {
   warning: '<svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
 };
 
-// I3: czas wzglÄdny dla ÅwieÅ¼ych sprawdzeÅ (âX min temu"), dokÅadna data
-// tylko dla starszych niÅ¼ 24 h â uÅ¼ytkownik od razu widzi, jak âÅwieÅ¼e"
-// jest ostatnie sprawdzenie, bez porÃ³wnywania zegarka z etykietÄ.
+// I3: czas względny dla świeżych sprawdzeń („X min temu"), dokładna data
+// tylko dla starszych niż 24 h — użytkownik od razu widzi, jak „świeże"
+// jest ostatnie sprawdzenie, bez porównywania zegarka z etykietą.
 function formatLastCheck(timestamp) {
   const locale = currentLang === 'pl' ? 'pl-PL' : 'en-US';
   const pl = currentLang === 'pl';
@@ -98,7 +99,7 @@ function buildCard(site, flash = null) {
   const ROVING_OFF = ' tabindex="-1"';
 
   const labelFreq = site.freqMinutes ? formatInterval(site.freqMinutes) : (t.freqLabels[site.freqIndex] || t.freqLabels[0]);
-  // U4: pauza widoczna teÅ¼ tekstowo, nie tylko przez opacity.
+  // U4: pauza widoczna też tekstowo, nie tylko przez opacity.
   const pausedBadge = site.isPaused ? `<span class="badge-paused">${t.badgePaused}</span>` : '';
   const badgeHtml = site.hasChanged ? `<span class="badge-changed">${t.badgeNew}</span>` : '';
   const lastCheck = site.lastCheckTime ? formatLastCheck(site.lastCheckTime) : '&mdash;';
@@ -112,9 +113,9 @@ function buildCard(site, flash = null) {
   const flashHtml = flash
     ? ` &bull; <span class="meta-flash ${flash.kind}" role="status" aria-live="polite">${escapeHtml(flash.text)}</span>`
     : '';
-  // U1: link do podglÄdu zmian â widoczny tylko przy NIEODCZYTANEJ zmianie.
-  // KlikniÄcie otwiera diff i czyÅci hasChanged (refreshSiteContent),
-  // wiÄc po obejrzeniu zmian przycisk znika.
+  // U1: link do podglądu zmian — widoczny tylko przy NIEODCZYTANEJ zmianie.
+  // Kliknięcie otwiera diff i czyści hasChanged (refreshSiteContent),
+  // więc po obejrzeniu zmian przycisk znika.
   // Heuristic flag: the page shell is large but readable text is tiny ->
   // suggest switching to rendered mode (JS draws the content).
   const suggestHtml = site.suggestRendered
@@ -279,9 +280,9 @@ function buildCard(site, flash = null) {
     }
   });
 
-  // A1: Enter/Spacja na karcie (na .site-info) otwiera âotwieranÄ stronÄ"
-  // â dotÄd obsÅuga klawiatury koÅczyÅa siÄ na strzaÅkach z drag.js.
-  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnÄtrz.
+  // A1: Enter/Spacja na karcie (na .site-info) otwiera „otwieraną stronę"
+  // — dotąd obsługa klawiatury kończyła się na strzałkach z drag.js.
+  // Nie przechwytujemy klawisza, gdy fokus jest na przycisku/linku wewnątrz.
   card.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (e.target.closest('button, a, input, select, textarea')) return;
@@ -332,7 +333,7 @@ async function renderSites() {
 
   document.getElementById('site-count-badge').textContent = `(${sites.length}/${MAX_SITES})`;
 
-  // Pusty stan (U6): zamiast pustego kontenera â wyraÅ¼ne CTA.
+  // Pusty stan (U6): zamiast pustego kontenera — wyrażne CTA.
   if (sites.length === 0) {
     // Empty state: duzy przycisk CTA zamiast samego tekstu - od razu
     // widoczna sciezka "co robic", a pod nim czytelna wskazowka o menu
@@ -392,7 +393,7 @@ async function renderSites() {
   }
   container.replaceChildren(...nodes);
 
-  // PodpowiedÅº o grupowaniu: RAZ, gdy uzytkownik ma wlasnie 2 strony (wtedy
+  // Podpowiedź o grupowaniu: RAZ, gdy uzytkownik ma wlasnie 2 strony (wtedy
   // grupowanie staje sie przydatne, a jeszcze nie ma o nim pojecia). Flaga
   // w storage gwarantuje jednorazowosc - nie przeszkadzamy na kazdym
   // renderze ani przy kolejnych uruchomieniach.

@@ -1,20 +1,24 @@
-// === POPUP.JS: wklej na gÃ³rze pliku (pod staÅymi) ===
-// Potem w caÅym popup.js zamieÅ KAÅ»DE wywoÅanie
-//     chrome.permissions.request(
-// na
-//     requestWithResume(
-// (dotyczy teÅ¼ kreatora / startWizard, jeÅli prosi o uprawnienie).
+// === POPUP.JS ===
+// Lista monitorów (widok popupu) + karty kreatora/edycji/restore (te same
+// pliki HTML/JS obsługują popup.html?wizard=1 / ?edit=1 / ?restore=1).
+// Kreator (wizard.js) jest ładowany leniwie (ensureWizardScript) — sama
+// lista go nie parsuje.
+//
+// requestWithResume (niżej) to wrapper na chrome.permissions.request:
+// okienko zgody Chrome zamyka popup, więc znacznik resumeAfterPermission
+// zapisany PRZED okienkiem pozwala tłu (permissions.onAdded) przywrócić UI.
+// Wszystkie prośby o uprawnienia hosta idą wyłącznie przez ten wrapper.
 
 const RESUME_FLAG = 'resumeAfterPermission';
 
-// Zapisuje znacznik PRZED oknem zgody. Okno zgody zamyka popup, wiÄc kod po
-// await moÅ¼e siÄ juÅ¼ nie wykonaÄ - dlatego znacznik czyta i usuwa tÅo
+// Zapisuje znacznik PRZED oknem zgody. Okno zgody zamyka popup, więc kod po
+// await może się już nie wykonać - dlatego znacznik czyta i usuwa tło
 // (background.js, chrome.permissions.onAdded).
 async function requestWithResume(details) {
   await chrome.storage.local.set({ [RESUME_FLAG]: Date.now() });
   try {
     const granted = await chrome.permissions.request(details);
-    // Popup przeÅ¼yÅ (okno zgody go nie zamknÄÅo) - znacznik niepotrzebny.
+    // Popup przeżył (okno zgody go nie zamknęło) - znacznik niepotrzebny.
     await chrome.storage.local.remove(RESUME_FLAG);
     return granted;
   } catch (err) {
@@ -1012,12 +1016,12 @@ function showForm(site = null, prefill = null) {
   }
 }
 
-// --- âWybierz element na stronieâ¦â (element picker) ----------------------
-// Otwiera monitorowany URL w nowej karcie z wstrzykniÄtym pickerem
-// (patrz picker.js): najechanie podÅwietla fragment, klik wybiera element
-// i generuje selektor. Popup w tym czasie siÄ zamknie (karta przejmuje
-// focus), wiÄc wynik wraca przez storage (pendingPicker), a przy
-// kolejnym otwarciu popupu przywracamy formularz z uzupeÅnionym polem.
+// --- „Wybierz element na stronie…” (element picker) ----------------------
+// Otwiera monitorowany URL w nowej karcie z wstrzykniętym pickerem
+// (patrz picker.js): najechanie podświetla fragment, klik wybiera element
+// i generuje selektor. Popup w tym czasie się zamknie (karta przejmuje
+// focus), więc wynik wraca przez storage (pendingPicker), a przy
+// kolejnym otwarciu popupu przywracamy formularz z uzupełnionym polem.
 async function startPicker() {
   const t = TRANSLATIONS[currentLang];
   clearFormMessage();
@@ -1033,9 +1037,9 @@ async function startPicker() {
     return;
   }
 
-  // chrome.scripting w karcie wymaga uprawnienia hosta â tego samego,
-  // ktÃ³re i tak wymaga samo monitorowanie. ProÅba musi nastÄpiÄ w geÅcie
-  // uÅ¼ytkownika (klik), dlatego jest tutaj, a nie w tle.
+  // chrome.scripting w karcie wymaga uprawnienia hosta — tego samego,
+  // które i tak wymaga samo monitorowanie. Prośba musi nastąpić w geście
+  // użytkownika (klik), dlatego jest tutaj, a nie w tle.
   const pattern = `${new URL(url).origin}/*`;
   const hasPermission = await chrome.permissions.contains({ origins: [pattern] });
   if (!hasPermission) {
@@ -1073,7 +1077,7 @@ async function startPicker() {
     showFormMessage(res && res.error === 'permission' ? t.pickerPermission : t.errSave);
     return;
   }
-  // StÄd popup zamknie siÄ sam, gdy karta przejmie focus; wynik odbierze
+  // Stąd popup zamknie się sam, gdy karta przejmie focus; wynik odbierze
   // maybeRestorePicker() przy kolejnym otwarciu.
 }
 

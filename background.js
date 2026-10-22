@@ -522,6 +522,11 @@ async function extractFragment(html, selector) {
   const trimmed = removeRawTextBlocks(removeComments(html));
   const res = await chrome.runtime.sendMessage({ target: 'offscreen', action: 'extractFragment', html: trimmed, selector });
   if (!res || !res.ok) throw new Error('Invalid selector');
+  // Audyt#3/poprawka3: niepoprawny SK\u0141ADNIOWO selektor (querySelector rzuca)
+  // to inny b\u0142\u0105d ni\u017c selektor poprawny, ale nic nie pasuj\u0105cy \u2014 karta
+  // pokazuje "Invalid selector" (i18n errSelectorInvalid), nie myl\u0105c\u0105c
+  // podpowiedzi\u0105 o stronach rysowanych JS-em.
+  if (res.invalidSelector) throw new Error('Invalid selector');
   if (!res.found) throw new Error('Selector not found in page source (JS-drawn content? enable rendered mode)');
   return res.html;
 }
@@ -613,7 +618,11 @@ function waitForTabComplete(tabId, timeoutMs) {
 function readRenderedText(tabId, selector) {
   return chrome.scripting.executeScript({
     target: { tabId },
-    func: (sel, maxMs, stableMs) => new Promise((resolve) => {
+    func: (sel, maxMs, stableMs) => new Promise((resolve, reject) => {
+      // Audyt#3/poprawka3: niepoprawny sk\u0142adniowo selektor \u2014 od razu reject,
+      // \u017ceby executeScript zwr\u00f3ci\u0142 "Invalid selector" (ta sama etykieta co
+      // w trybie szybkim) zamiast surowego SyntaxError z document.querySelector.
+      try { if (sel) document.querySelector(sel); } catch (e) { return reject(new Error('Invalid selector')); }
       const start = Date.now();
       let last = null;
       let lastChange = start;
@@ -836,8 +845,15 @@ async function runCheck(siteId) {
 
     // Snapshot do podgl\u0105du zmian (U1) \u2014 liczony tylko przy pe\u0142nym pobraniu;
     // przy 304 tre\u015b\u0107 jest z definicji niezmieniona, snapshot zostaje stary.
+    // Audyt#3/poprawka2: tryb RENDEROWANY nie przechodzi przez
+    // cleanHtmlStructured (kt\u00f3re tnie do SNAPSHOT_MAX_CHARS), wi\u0119c surowy
+    // innerText bywa\u0142 wielomegabajtowy (np. niesko\u0144czony scroll). Hasz nadal
+    // liczy z PE\u0141NEGO tekstu (fetchResult.text u\u017cyty poni\u017cej) \u2014 przycinamy
+    // tylko snapshot przechowywany do podgl\u0105du diffu.
     if (!fetchResult.notModified) {
-      fetchResult.snapshotText = site.renderMode === 'rendered' ? fetchResult.text : cleanHtmlStructured(fetchResult.text);
+      fetchResult.snapshotText = site.renderMode === 'rendered'
+        ? fetchResult.text.slice(0, SNAPSHOT_MAX_CHARS)
+        : cleanHtmlStructured(fetchResult.text);
     }
 
     let result;
@@ -1088,7 +1104,13 @@ function sanitizeSiteInput(raw) {
     renderMode,
     group: String(s.group || '').trim().slice(0, 60),
     selector,
-    openUrl: openUrl || url
+    openUrl: openUrl || url,
+    // Audyt#3/poprawka1: czy "otwierana strona" byla w ogole podana? Formularz
+    // edycji nie ma pola openUrl, wiec bez tej flagi nie odr\u00f3\u017cnimy "u\u017cytkownik
+    // wyczy\u015bci\u0142/zmieni\u0142" od "formularz w og\u00f3le go nie przys\u0142a\u0142" \u2014 a to
+    // drugie musi ZACHOWA\u0106 dotychczasow\u0105 warto\u015b\u0107 przy edycji (patrz
+    // handleSaveSite). Flaga jest wy\u0142\u0105czona z zapisu rekordu (handleImportSites).
+    openUrlCustom: Boolean(openUrl)
   };
 }
 
@@ -1138,6 +1160,16 @@ async function handleSaveSite(msg) {
       const cur = sites[idx];
       const before = targetKey(cur);
       oldUrl = cur.url;
+      // Audyt#3/poprawka1: formularz edycji nie wysy\u0142a pola "Otwierana
+      // strona" (openUrl), a sanitizeSiteInput domy\u015blnie podstawa\u0142 url
+      // monitorowany \u2014 ka\u017cda edycja cicho zerowa\u0142a customowy openUrl
+      // (dost\u0119pny w\u0142a\u015bciwie przez import backupu). Edycja bez podanego
+      // openUrl zachowuje dotychczasow\u0105 warto\u015b\u0107 rekordu; nowa strona
+      // i import dzia\u0142aj\u0105 jak dotychczas. openUrl nie wchodzi do
+      // targetKey, wi\u0119c nie psuje baseline'u.
+      if (!input.openUrlCustom && cur.openUrl && cur.openUrl !== cur.url) {
+        fields.openUrl = cur.openUrl;
+      }
       Object.assign(cur, fields);
 
       if (targetKey(cur) !== before) {
@@ -1218,7 +1250,10 @@ async function handleImportSites(msg) {
 
       const siteId = newSiteId();
       // Group by NAME (backups carry names): reuse a group with the same name or create one.
-      const { group: groupName, ...fieldsOnly } = input;
+      // Audyt#3/poprawka1: openUrlCustom to flaga helper sanitizeSiteInput \u2014
+      // celowo NIE wchodzi do zapisywanego rekordu (schemat sites ma zosta\u0107
+      // czysty; czyta j\u0105 tylko handleSaveSite).
+      const { group: groupName, openUrlCustom, ...fieldsOnly } = input;
       let groupId = null;
       if (groupName) {
         let g = groups.find((x) => x.name.toLowerCase() === groupName.toLowerCase());
