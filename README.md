@@ -1,6 +1,6 @@
 # Web Page Change Monitor
 
-[PL](#pl) | [EN](#en)
+[EN](#en) | [PL](#pl)
 
 ---
 <a name="en"></a>
