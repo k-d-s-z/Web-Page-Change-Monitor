@@ -3,6 +3,82 @@
 [PL](#pl) | [EN](#en)
 
 ---
+<a name="en"></a>
+
+## Web Page Change Monitor (English)
+
+**Web Page Change Monitor** is a Chromium extension (Manifest V3) that periodically checks selected pages and notifies you when their content changes. Privacy-first by design: no middleman servers, no accounts, no telemetry — all analysis happens locally in your browser.
+
+### Features
+
+- **Monitor up to 50 pages**, each with its own check frequency (from 1 minute to once a day)
+- **Two fetching modes:**
+  - *Fast (default)* — fetches the HTML sent by the server, without running JavaScript; light and quick
+  - *Rendered page mode* — opens the page in a hidden tab and reads the rendered content; for pages that draw their content with scripts (SPAs, XHR-loaded result tables)
+- **Automatic JS-page detection** — when a page returns a large HTML shell but almost no readable text, the card suggests enabling rendered mode
+- **Smart comparison:**
+  - optional ignoring of date/time changes (protects against false alarms from "last updated" stamps)
+  - line-by-line diff view with changed words highlighted
+  - collapsing of unchanged runs, "only changes" view (on by default), "Jump to changes" button
+  - +added / −removed statistics, honest notice for very large changes (simplified mode)
+- **Desktop notifications** linking to the diff view
+- **List management:** cards with favicons, pausing, drag &amp; drop reordering with persisted order, "only changed" filter, "Mark all as read", unread-count badge on the extension icon
+- **Context menu** — "Monitor this page" from any page
+- **Light / dark themes** (full support for both, choice persisted)
+- **PL / EN language** (whole UI, including notifications)
+- **Settings backup** — JSON export/import with full validation (2 MB limit, version and duplicate checks)
+
+### Installation (developer mode)
+
+1. Download or clone the repository
+2. Open `chrome://extensions`
+3. Enable "Developer mode"
+4. Click "Load unpacked" and point to the extension directory
+
+### Usage
+
+1. Click the extension icon, or use the "Monitor this page" context menu
+2. Provide a name, URL and check frequency
+3. **Opened page (optional)** — the address that opens when you click the card or a notification; useful when the monitored URL is a raw data endpoint (JSON)
+4. The first check stores a baseline; subsequent checks detect changes
+5. Click "View changes" on a card to open the diff view
+
+**Tip:** if a card shows "Looks JS-rendered", edit the monitor and enable "Rendered page mode".
+
+### Privacy
+
+- The extension **never sends data anywhere except the pages you monitor**
+- Fast mode fetches the page like a regular browser request; the "Require cookies" option decides whether your session is included
+- Rendered mode **always uses your browser session** (it opens a real tab) and cannot run cookieless — assume the page sees you as on a normal visit
+- Monitoring `http://` pages with cookies is blocked (protects your session)
+
+### Permissions and why
+
+| Permission | Purpose |
+| --- | --- |
+| `storage`, `unlimitedStorage` | local storage of the site list and content snapshots |
+| `alarms` | recurring check schedule (MV3) |
+| `notifications` | change notifications |
+| `contextMenus` | the "Monitor this page" entry |
+| `scripting`, `tabs` | rendered page mode (hidden tab, text reading) |
+| `favicon` | site icons on cards |
+| `optional_host_permissions` | access to monitored origins, granted only after you add a page |
+
+### Project structure
+
+```
+background.js   — service worker: scheduling, fetching, change detection, notifications
+popup.html/.js  — list and form UI
+cards.js        — monitor card rendering
+drag.js         — drag & drop reordering
+diff.html/.js   — diff view page
+i18n.js         — PL/EN translations
+storage.js      — popup ↔ service worker messaging
+manifest.json   — Manifest V3, version 1.8.0
+```
+
+
+---
 
 <a name="pl"></a>
 
@@ -83,83 +159,6 @@ Bez zależności zewnętrznych; do developmentu: ESLint (`npm run lint`).
 ### Licencja
 
 GPL-3.0 — szczegóły w pliku `LICENSE`.
-
----
-
-<a name="en"></a>
-
-## Web Page Change Monitor (English)
-
-**Web Page Change Monitor** is a Chromium extension (Manifest V3) that periodically checks selected pages and notifies you when their content changes. Privacy-first by design: no middleman servers, no accounts, no telemetry — all analysis happens locally in your browser.
-
-### Features
-
-- **Monitor up to 50 pages**, each with its own check frequency (from 1 minute to once a day)
-- **Two fetching modes:**
-  - *Fast (default)* — fetches the HTML sent by the server, without running JavaScript; light and quick
-  - *Rendered page mode* — opens the page in a hidden tab and reads the rendered content; for pages that draw their content with scripts (SPAs, XHR-loaded result tables)
-- **Automatic JS-page detection** — when a page returns a large HTML shell but almost no readable text, the card suggests enabling rendered mode
-- **Smart comparison:**
-  - optional ignoring of date/time changes (protects against false alarms from "last updated" stamps)
-  - line-by-line diff view with changed words highlighted
-  - collapsing of unchanged runs, "only changes" view (on by default), "Jump to changes" button
-  - +added / −removed statistics, honest notice for very large changes (simplified mode)
-- **Desktop notifications** linking to the diff view
-- **List management:** cards with favicons, pausing, drag &amp; drop reordering with persisted order, "only changed" filter, "Mark all as read", unread-count badge on the extension icon
-- **Context menu** — "Monitor this page" from any page
-- **Light / dark themes** (full support for both, choice persisted)
-- **PL / EN language** (whole UI, including notifications)
-- **Settings backup** — JSON export/import with full validation (2 MB limit, version and duplicate checks)
-
-### Installation (developer mode)
-
-1. Download or clone the repository
-2. Open `chrome://extensions`
-3. Enable "Developer mode"
-4. Click "Load unpacked" and point to the extension directory
-
-### Usage
-
-1. Click the extension icon, or use the "Monitor this page" context menu
-2. Provide a name, URL and check frequency
-3. **Opened page (optional)** — the address that opens when you click the card or a notification; useful when the monitored URL is a raw data endpoint (JSON)
-4. The first check stores a baseline; subsequent checks detect changes
-5. Click "View changes" on a card to open the diff view
-
-**Tip:** if a card shows "Looks JS-rendered", edit the monitor and enable "Rendered page mode".
-
-### Privacy
-
-- The extension **never sends data anywhere except the pages you monitor**
-- Fast mode fetches the page like a regular browser request; the "Require cookies" option decides whether your session is included
-- Rendered mode **always uses your browser session** (it opens a real tab) and cannot run cookieless — assume the page sees you as on a normal visit
-- Monitoring `http://` pages with cookies is blocked (protects your session)
-
-### Permissions and why
-
-| Permission | Purpose |
-| --- | --- |
-| `storage`, `unlimitedStorage` | local storage of the site list and content snapshots |
-| `alarms` | recurring check schedule (MV3) |
-| `notifications` | change notifications |
-| `contextMenus` | the "Monitor this page" entry |
-| `scripting`, `tabs` | rendered page mode (hidden tab, text reading) |
-| `favicon` | site icons on cards |
-| `optional_host_permissions` | access to monitored origins, granted only after you add a page |
-
-### Project structure
-
-```
-background.js   — service worker: scheduling, fetching, change detection, notifications
-popup.html/.js  — list and form UI
-cards.js        — monitor card rendering
-drag.js         — drag & drop reordering
-diff.html/.js   — diff view page
-i18n.js         — PL/EN translations
-storage.js      — popup ↔ service worker messaging
-manifest.json   — Manifest V3, version 1.8.0
-```
-
 No external dependencies; for development: ESLint (`npm run lint`).
 
 ### License
