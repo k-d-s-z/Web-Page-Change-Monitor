@@ -35,6 +35,11 @@ async function closeWizardTab() {
 // URL for which the user already confirmed the plain-http warning (step 1).
 let wizardHttpConfirm = null;
 
+// Audyt#4: URL, dla kt\u00f3rego u\u017cytkownik potwierdzi\u0142 ju\u017c ostrze\u017cenie o adresie
+// lokalnym/prywatnym (localhost, LAN). Ten sam dwuklikowy wzorzec co http://:
+// pierwszy klik pokazuje ostrze\u017cenie, drugi idzie dalej.
+let wizardLocalConfirm = null;
+
 // True while an external flow (Chrome's permission dialog, the picker tab)
 // may close this popup ON PURPOSE: those flows must resurrect the wizard via
 // their own drafts, so the pagehide handler below must not treat such a close
@@ -53,6 +58,7 @@ const WIZARD_PLACEHOLDERS = {
 
 function startWizard(prefill = null) {
   wizardHttpConfirm = null;
+  wizardLocalConfirm = null;
   wizardState = {
     step: 1,
     url: (prefill && prefill.url) || '',
@@ -388,6 +394,15 @@ async function wizardNext() {
     if (urlObj.protocol === 'http:' && wizardHttpConfirm !== url) {
       wizardHttpConfirm = url;
       showWizardMessage(t.warnHttpWizard, 'warn');
+      return;
+    }
+
+    // Audyt#4: adres lokalny/prywatny (localhost, router w LAN) \u2014 legalny use
+    // case (monitoring w\u0142asnego urz\u0105dzenia), wi\u0119c nie blokujemy, ale zapis
+    // musi by\u0107 \u015bwiadomy: pierwszy klik ostrzega, drugi potwierdza.
+    if (isPrivateOrLocalUrl(url) && wizardLocalConfirm !== url) {
+      wizardLocalConfirm = url;
+      showWizardMessage(t.warnPrivateWizard, 'warn');
       return;
     }
 

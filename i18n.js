@@ -139,6 +139,9 @@ const TRANSLATIONS = {
     warnHttp: 'WARNING: http:// is unencrypted. Traffic can be intercepted (MITM). Click Save again to proceed anyway.',
     errHttpCookiesBlocked: 'SECURITY ERROR: Session cookies cannot be sent over unencrypted http://. Use https:// or disable cookies option.',
     warnHttpWizard: 'WARNING: http:// is unencrypted. Traffic can be intercepted (MITM). Click Next again to proceed anyway.',
+    // Audyt#4: adres lokalny/prywatny (localhost, LAN) - dwuklikowe potwierdzenie.
+    warnPrivate: 'WARNING: this is a local or private address (localhost / LAN). The monitor will request it from your browser. Make sure it is your own network. Click Save again to confirm.',
+    warnPrivateWizard: 'WARNING: this is a local or private address (localhost / LAN). The monitor will request it from your browser. Make sure it is your own network. Click Next again to confirm.',
     hintJs: 'By default the extension fetches the page code without running JavaScript. If the content is drawn by scripts, enable the rendered page mode checkbox below.',
     lblSelector: 'Watch only part of the page (CSS selector)',
     hintSelector: 'Easiest way: click "Pick element on the page..." - the page opens, hovering highlights each fragment, and a click picks the one to watch. You can also type a CSS selector yourself, e.g. #content (id) or .results (class). In fast mode the element must exist in the page source code; if it does not (content drawn by scripts), enable rendered mode.',
@@ -311,6 +314,9 @@ const TRANSLATIONS = {
     warnHttp: 'OSTRZE\u017bENIE: Po\u0142\u0105czenie http:// nie jest szyfrowane. Kliknij Zapisz ponownie, aby kontynuowa\u0107 na w\u0142asne ryzyko.',
     errHttpCookiesBlocked: 'B\u0141\u0104D BEZPIECZE\u0143STWA: Ciasteczka sesyjne nie mog\u0105 by\u0107 przesy\u0142ane przez nieszyfrowane http://. U\u017cyj https:// lub wy\u0142\u0105cz opcj\u0119 ciasteczek.',
     warnHttpWizard: 'OSTRZE\u017bENIE: Po\u0142\u0105czenie http:// nie jest szyfrowane. Kliknij Dalej ponownie, aby kontynuowa\u0107 na w\u0142asne ryzyko.',
+    // Audyt#4: adres lokalny/prywatny (localhost, LAN) - dwuklikowe potwierdzenie.
+    warnPrivate: 'OSTRZE\u017bENIE: to adres lokalny lub prywatny (localhost / sie\u0107 lokalna). Monitor b\u0119dzie odpytywa\u0142 ten serwer z Twojej przegl\u0105darki. Upewnij si\u0119, \u017ce to Twoja w\u0142asna sie\u0107. Kliknij Zapisz ponownie, aby potwierdzi\u0107.',
+    warnPrivateWizard: 'OSTRZE\u017bENIE: to adres lokalny lub prywatny (localhost / sie\u0107 lokalna). Monitor b\u0119dzie odpytywa\u0142 ten serwer z Twojej przegl\u0105darki. Upewnij si\u0119, \u017ce to Twoja w\u0142asna sie\u0107. Kliknij Dalej ponownie, aby potwierdzi\u0107.',
     hintJs: 'Domy\u015blnie rozszerzenie pobiera kod strony bez uruchamiania JavaScriptu. Je\u015bli tre\u015b\u0107 jest rysowana przez skrypty, w\u0142\u0105cz poni\u017cej tryb strony renderowanej.',
     lblSelector: 'Monitoruj tylko cz\u0119\u015b\u0107 strony (selektor CSS)',
     hintSelector: 'Naj\u0142atwiej: kliknij \u201eWybierz element na stronie...\u201d - strona si\u0119 otworzy, najechanie pod\u015bwietla kolejne fragmenty, a klik wybiera ten do monitorowania. Mo\u017cna te\u017c wpisa\u0107 selektor CSS samodzielnie, np. #content (id) lub .results (klasa). W trybie szybkim element musi istnie\u0107 w kodzie \u017ar\u00f3d\u0142owym strony; je\u015bli go tam nie ma (tre\u015b\u0107 rysowana skryptami), w\u0142\u0105cz tryb renderowany.',
@@ -319,7 +325,7 @@ const TRANSLATIONS = {
     pickerDone: 'Wybrano fragment - sprawd\u017a selektor poni\u017cej i zapisz.',
     pickerDoneRendered: 'Wybrano fragment. Nie wyst\u0119puje on w kodzie \u017ar\u00f3d\u0142owym strony (jest rysowany skryptami), wi\u0119c w\u0142\u0105czono tryb renderowany - sprawd\u017a selektor poni\u017cej i zapisz.',
     titlePause: 'Wstrzymaj monitorowanie',
-    titleResume: 'Wzn\\u00f3w monitorowanie',
+    titleResume: 'Wzn\u00f3w monitorowanie',
     titleEditBtn: 'Edytuj',
     titleDeleteBtn: 'Usu\u0144',
     titleRefresh: 'Sprawd\u017a teraz',
