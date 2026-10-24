@@ -71,7 +71,8 @@ Requires Chrome 116 or newer (offscreen documents, Manifest V3).
 | `alarms` | recurring check schedule (MV3) |
 | `notifications` | change notifications |
 | `contextMenus` | the "Monitor this page" entry |
-| `scripting`, `tabs` | rendered page mode (hidden tab, text reading) |
+| `scripting` | injecting the element picker into the page and reading text out of the hidden tab (rendered mode) |
+| `tabs` | the wizard & edit tab (opening, finding and focusing it among all open tabs), the hidden tab of rendered mode (a minimized background window), opening a page from a notification; `activeTab` alone would not cover any of these |
 | `offscreen` | extracting the selected page fragment (CSS selector) in a background document |
 | `favicon` | site icons on cards |
 | `optional_host_permissions` | access to monitored origins, granted only after you add a page |
@@ -169,7 +170,8 @@ Wymaga Chrome 116 lub nowszego (dokumenty offscreen, Manifest V3).
 | `alarms` | harmonogram cyklicznych sprawdzeń (MV3) |
 | `notifications` | powiadomienia o wykrytych zmianach |
 | `contextMenus` | pozycja „Monitoruj stronę” |
-| `scripting`, `tabs` | tryb strony renderowanej (ukryta karta, odczyt tekstu) |
+| `scripting` | wstrzykiwanie selektora elementów do strony i odczyt tekstu z ukrytej karty (tryb renderowany) |
+| `tabs` | karta kreatora i edycji (otwieranie, odnajdowanie i fokus wśród wszystkich otwartych kart), ukryta karta trybu renderowanego (zminimalizowane okno w tle), otwieranie strony z powiadomienia; samo `activeTab` nie pokryłoby żadnej z tych potrzeb |
 | `offscreen` | wyodrębnianie wybranego fragmentu strony (selektor CSS) w dokumencie w tle |
 | `favicon` | ikony stron na kartach |
 | `optional_host_permissions` | dostęp do monitorowanych adresów udzielany dopiero po dodaniu strony |
