@@ -1,15 +1,18 @@
 'use strict';
 
-// Testy retencji snapshotow — Audyt 2.0.0 (2)/P1: czysta funkcja
-// planSnapshotPrune (reguly ciecia) + model kolejki withStorageLock
-// (wspolbieznosc odczyt-modyfikacja-zapis "sites").
+// Testy retencji snapshotow — Audyt 2.0.0 (2)/P1 + Audyt #3/P1:
+// (1) czysta funkcja planSnapshotPrune (reguly ciecia),
+// (2) model kolejki withStorageLock (wlasnosci mechanizmu),
+// (3) INTEGRACJA: prawdziwy pruneSnapshots + withStorageLock wyekstrahowane
+//     z background.js, z kontrolowanym mockiem chrome.storage.local —
+//     usuniecie blokady z produkcji pada na tescie, nie na audycie.
 // Uruchomienie: npm test  (node >= 18, zero zaleznosci zewnetrznych).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { extractDecls } = require('./extract-decl.js');
+const { extractDecls, extractOne } = require('./extract-decl.js');
 
 const backgroundSrc = fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8');
 const bg = extractDecls(backgroundSrc, ['planSnapshotPrune']);
@@ -119,10 +122,8 @@ test('planSnapshotPrune: wiele rekordow, tylko przeterminowane uciete', () => {
 });
 
 // --- Model kolejki withStorageLock (Audyt 2.0.0 (2)/P1) ---
-// Produkcja: pruneSnapshots() w background.js oplexa odczyt-modyfikacja-
-// zapis ta sama kolejka (withStorageLock), co pozostale zapisy "sites".
-// Tu odtwarzamy kolejke inline (identyczne 3 linie) i dowodzimy, ze bez
-// niej rownolegly check strony ginie nadpisany przez pozniejsze sprzatanie.
+// Te dwa testy dowodza WLASCIWOSCI mechanizmu kolejki (izolacyjnie,
+// czytelnie). Ochrona samego background.js jest w sekcji integracyjnej.
 
 test('bez kolejki: rownolegle sprzatanie gubi update checku (regresja P1)', async () => {
   const store = { sites: [{ name: 'A', lastSnapshot: 'v1' }] };
@@ -163,4 +164,102 @@ test('z kolejka (model withStorageLock): update checku przezywa prune', async ()
   await Promise.all([prune, checkUpdate]);
   assert.equal(store.sites[0].status, 'changed'); // ocalony
   assert.equal(store.sites[0].prevSnapshot, '');
+});
+
+// --- Integracja: REALNY kod produkcyjny (Audyt #3/P1) ---
+// Wyjasnienie: wyzej dowodzimy wlasnosci mechanizmu; TU uruchamiamy
+// prawdziwe funkcje z background.js (ta sama ekstrakcja, ktora uzywaja
+// pure.test.js) z mockiem chrome.storage.local. Mock kluczowo odwzorowuje
+// prawdziwe storage: get przechwytuje dane W CHWILI WYWOLANIA i rozstrzyga
+// je po opoznieniu — bez tego przenikanie operacji byloby niefalsyfiowalne.
+
+function makeChromeApi(data) {
+  const store = JSON.parse(JSON.stringify(data));
+  return {
+    store,
+    api: {
+      storage: {
+        local: {
+          async get(keys) {
+            const list = Array.isArray(keys) ? keys : [keys];
+            const snapshot = {};
+            for (const k of list) {
+              snapshot[k] = store[k] === undefined ? undefined : JSON.parse(JSON.stringify(store[k]));
+            }
+            await new Promise((r) => setTimeout(r, 10));
+            return snapshot;
+          },
+          async set(obj) {
+            Object.assign(store, JSON.parse(JSON.stringify(obj)));
+          }
+        }
+      }
+    }
+  };
+}
+
+function makeProd(chromeApi) {
+  const decls = extractDecls(backgroundSrc, [
+    'withStorageLock', 'SNAPSHOT_PRUNE_CHECK_MS', 'SNAPSHOT_RETENTION_MAX_DAYS',
+    'planSnapshotPrune', 'pruneSnapshots'
+  ]);
+  // storageQueue to w background.js "let" — ekstraktor bierze tylko
+  // function/const, wiec deklarujemy je recznie (identycznie jak w zrodle).
+  const src = 'let storageQueue = Promise.resolve();\n' +
+    Object.values(decls).join('\n') +
+    '\nmodule.exports = { pruneSnapshots, withStorageLock };';
+  const m = { exports: {} };
+  new Function('module', 'exports', 'chrome', src)(m, m.exports, chromeApi);
+  return m.exports;
+}
+
+function freshSite() {
+  const now = Date.now();
+  return mkSite({ prevSnapshotTs: now - 30 * DAY, lastSnapshotTs: now - DAY });
+}
+
+test('integracyjny: produkcyjny prune tnie stary snapshot i zapisuje znacznik', async () => {
+  const h = makeChromeApi({ sites: [freshSite()], snapshotRetentionDays: 7 });
+  const { pruneSnapshots } = makeProd(h.api);
+  await pruneSnapshots();
+  assert.equal(h.store.sites[0].prevSnapshot, '');
+  assert.equal(h.store.sites[0].prevSnapshotTs, null);
+  assert.equal(h.store.sites[0].lastSnapshot, 'nowy'); // swiezy zostaje
+  assert.ok(Number.isFinite(h.store.snapshotPruneTime));
+});
+
+test('integracyjny: throttle — swiezy znacznik blokuje przycinanie i zapis znacznika', async () => {
+  const stamp = Date.now();
+  const h = makeChromeApi({ sites: [freshSite()], snapshotRetentionDays: 7, snapshotPruneTime: stamp });
+  const { pruneSnapshots } = makeProd(h.api);
+  await pruneSnapshots();
+  assert.equal(h.store.sites[0].prevSnapshot, 'stary'); // nietkniety
+  assert.equal(h.store.snapshotPruneTime, stamp);      // wczesny return, zero zapisow
+});
+
+test('integracyjny: rownolegly update "sites" przezywa PRODUKCYJNE prune (Audyt #3/P1)', async () => {
+  const h = makeChromeApi({ sites: [freshSite()], snapshotRetentionDays: 7 });
+  const { pruneSnapshots, withStorageLock } = makeProd(h.api);
+  const pruneRun = pruneSnapshots();
+  // Rownolegly check strony korzysta z TEJ SAMEJ produkcyjnej kolejki.
+  const checkRun = withStorageLock(async () => {
+    const d = await h.api.storage.local.get('sites');
+    d.sites[0].status = 'changed';
+    await h.api.storage.local.set({ sites: d.sites });
+  });
+  await Promise.all([pruneRun, checkRun]);
+  // Obie operacje musza przetrwac: update checku i przyciecie.
+  // Gdyby ktos usunal withStorageLock z pruneSnapshots, jedna z tych
+  // asercji pada (update checku nadpisalby ciete "sites" albo odwrotnie).
+  assert.equal(h.store.sites[0].status, 'changed');
+  assert.equal(h.store.sites[0].prevSnapshot, '');
+  assert.equal(h.store.sites[0].prevSnapshotTs, null);
+  assert.ok(Number.isFinite(h.store.snapshotPruneTime));
+});
+
+test('statyczny straznik: pruneSnapshots korzysta z withStorageLock', () => {
+  const decl = extractOne(backgroundSrc, 'pruneSnapshots');
+  assert.ok(decl, 'brak deklaracji pruneSnapshots w background.js');
+  assert.ok(decl.includes('withStorageLock('),
+    'pruneSnapshots pisze do "sites" bez withStorageLock — regresja P1 z audytu');
 });
