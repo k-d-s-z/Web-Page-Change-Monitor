@@ -227,7 +227,10 @@
     /* (see repo history for the original Polish comment) */
     .settings-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      /* Audyt 2.0.0 (feedback): 2x2 zamiast 3 kolumn - kolumna "Prywatno\u015b\u0107
+         i dane" l\u0105dowa\u0142a sama na drugim rz\u0119dzie i wyra\u017aanie rujnowa\u0142a rytm
+         pionowy panelu. */
+      grid-template-columns: 1fr 1fr;
       gap: 10px;
       align-items: start;
     }
@@ -247,6 +250,40 @@
     .settings-col-actions > button {
       flex: 1;
       min-width: 0;
+    }
+    /* Audyt 2.0.0 (feedback t.3): kolumna danych pionowo - poziomy flex
+       sciskal kontrolki do niewidocznosci w waskiej kolumnie.
+       (t.4) .col-stack zastapione siatka 2x2 - przycisk "Usu\u0144 wszystkie
+       dane" jest jedyna kontrol\u0105 swojej kom\u00f3rki i bierze 100% szerokosci. */
+    #snapshot-retention {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #btn-wipe-data {
+      width: 100%;
+    }
+    .retention-custom-row {
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .retention-custom-row.visible { display: flex; }
+    #retention-custom-days { width: 76px; }
+    .retention-unit {
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .settings-col-hint {
+      font-size: 12px;
+      color: var(--text-2);
+      margin: 5px 0 0;
+      line-height: 1.45;
+    }
+    /* Audyt 2.0.0 (feedback t.5): wszystkie naglowki sekcji ujednolicone do
+       .settings-col-label (styl MOTYW/JĘZYK); etykieta backupu rozciagnieta
+       na obie kolumny siatki. */
+    .settings-col-label.col-span {
+      grid-column: 1 / -1;
     }
     .lang-switcher {
       display: flex;
@@ -296,6 +333,20 @@
       overflow: hidden;
       text-overflow: ellipsis;
       box-sizing: border-box;
+    }
+    /* Audyt C: "Delete all data" - kolor danger; stan .pending (potwierdzenie
+       drugim klikiem) wypelnia przycisk na czerwono. */
+    .btn-danger {
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+    .btn-danger.pending {
+      background: var(--danger);
+      color: #fff;
+    }
+    .btn-danger[disabled] {
+      opacity: 0.6;
+      cursor: default;
     }
     .btn-secondary:hover {
       color: var(--text-strong);
@@ -583,8 +634,11 @@
       animation: spin 0.9s linear infinite;
     }
     @media (prefers-reduced-motion: reduce) {
+      /* Audit 2.0.0/P3: fully disable spin animations (diff.html already
+         does this); the .busy/.spinning state still dims the icon and the
+         summary text reports progress. */
       .btn-refresh.spinning .icon,
-      .icon-btn.busy svg { animation-duration: 3s; }
+      .icon-btn.busy svg { animation: none; }
       .settings-panel { transition: none; }
       .settings-panel:not(.open) { display: none; }
       .adv-section { transition: none; }
@@ -1434,12 +1488,43 @@
                 <button class="lang-btn" type="button" data-lang="pl">PL</button>
               </div>
             </div>
+            <!-- Audyt 2.0.0 (feedback t.4): pola danych w siatce 2x2 - kazda
+                 komorka to 50% szerokosci karty, przyciski pelnowymiarowe
+                 (latwe do klikniecia). Rzad: Zapisz | Wczytaj, potem
+                 Przechowywanie starych wersji | Czyszczenie danych.
+                 (t.5) wszystkie naglowki ujednolicone do .settings-col-label
+                 (styl MOTYW/JĘZYK); etykieta backupu rozciagnieta na 2 kolumny.
+                 Retencja: DOMYSLNIE 7 dni, menu 7 / 30 / 90 / wlasne (pole
+                 liczbowe pokazuje sie TYLKO po jawnym wyborze "wlasne"). -->
+            <div class="settings-col-label col-span" data-i18n="lblBackupCol">Backup of your page list</div>
             <div class="settings-col">
-              <div class="settings-col-label" data-i18n="lblBackupCol">Backup of your page list</div>
               <div class="settings-col-actions">
                 <button id="btn-backup" class="btn-secondary" type="button" data-i18n="btnBackup">Save to file</button>
+              </div>
+            </div>
+            <div class="settings-col">
+              <div class="settings-col-actions">
                 <button id="btn-restore" class="btn-secondary" type="button" data-i18n="btnRestore">Load from file</button>
               </div>
+            </div>
+            <div class="settings-col">
+              <div class="settings-col-label" data-i18n="lblRetention">Retention of old versions</div>
+              <select id="snapshot-retention" data-i18n-title="retentionHint">
+                <option value="7" data-i18n="retention7d">7 days</option>
+                <option value="30" data-i18n="retention30d">30 days</option>
+                <option value="90" data-i18n="retention90d">90 days</option>
+                <option value="custom" data-i18n="retentionCustom">Custom</option>
+              </select>
+              <div class="retention-custom-row" id="retention-custom-row">
+                <input type="number" id="retention-custom-days" min="1" max="3650" step="1" inputmode="numeric">
+                <span class="retention-unit" data-i18n="retentionDaysUnit">days</span>
+              </div>
+              <p class="settings-col-hint" data-i18n="retentionHintLong">You choose how long old page versions stay stored. Older ones are removed automatically and silently — the page keeps being monitored.</p>
+            </div>
+            <div class="settings-col">
+              <div class="settings-col-label" data-i18n="lblWipe">Data cleanup</div>
+              <button id="btn-wipe-data" class="btn-secondary btn-danger" type="button" data-i18n="btnWipeData" data-i18n-title="wipeHint">Delete all data</button>
+              <p class="settings-col-hint" data-i18n="wipeHintLong">Deletes every monitored page with its stored versions, groups and drafts. Language, theme and settings stay. A second click confirms.</p>
             </div>
           </div>
           <input type="file" id="restore-file-input" accept=".json,application/json" style="display: none;">

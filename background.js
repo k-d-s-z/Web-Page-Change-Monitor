@@ -145,7 +145,8 @@ const HANDLERS = {
   previewSite: (msg) => handlePreviewSite(msg),
   startPicker: (msg, sender) => handleStartPicker(msg, sender),
   pickerPicked: (msg, sender) => handlePickerPicked(msg, sender),
-  pickerCancelled: (msg, sender) => handlePickerCancelled(msg, sender)
+  pickerCancelled: (msg, sender) => handlePickerCancelled(msg, sender),
+  wipeAllData: () => handleWipeAllData()
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -160,7 +161,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const fromExtensionPage = Boolean(
     sender.url && sender.url.startsWith(chrome.runtime.getURL(''))
   );
-  const isPickerAction = typeof msg && msg.action === 'string' && msg.action.startsWith('picker');
+  // Audit 2.0.0/P1: typeof always returns a non-empty STRING ("object"),
+  // so the old "typeof msg &&" guard was always truthy and a null/undefined
+  // msg threw on msg.action. Boolean(msg) is the real null check.
+  const isPickerAction = Boolean(msg) && typeof msg.action === 'string' && msg.action.startsWith('picker');
   if (isPickerAction && !(sender.tab && sender.tab.id != null)) return;
   if (!isPickerAction && !fromExtensionPage) return;
 
@@ -232,6 +236,8 @@ async function setupAlarms() {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'wizard_cleanup') {
     await cleanupAbandonedWizard();
+    // Audyt C: przegl\u0105d retencji snapshot\u00f3w (sam tnie najwy\u017cej raz na godzin\u0119).
+    await pruneSnapshots();
     return;
   }
   if (alarm.name.startsWith('check_')) {
@@ -773,6 +779,8 @@ function commitCheck(siteId, expected, newHash, fetchResult) {
       suggestRendered: Boolean(fetchResult && fetchResult.suggestRendered),
       prevSnapshot: changed ? (cur.lastSnapshot || cur.prevSnapshot || '') : (cur.prevSnapshot || ''),
       lastSnapshot: snapshotText,
+      prevSnapshotTs: changed ? Date.now() : (cur.prevSnapshotTs || null),
+      lastSnapshotTs: Date.now(),
       changedAt: changed ? Date.now() : (cur.changedAt || null)
     };
     await chrome.storage.local.set({ sites });
@@ -803,6 +811,69 @@ function commitNotModified(siteId, expected, fetchResult) {
     };
     await chrome.storage.local.set({ sites });
     return { status: 'unchanged', site: sites[idx] };
+  });
+}
+
+// Audyt C \u2014 retencja snapshot\u00f3w: stare wersje stron (prevSnapshot) i
+// snapshoty stron dawno niesprawdzanych (np. wstrzymanych) nie siedz\u0105 w
+// storage bezterminowo. Ustawienie snapshotRetentionDays (popup: Settings
+// \u2192 Privacy and data): presety 7/30/90 dni lub warto\u015b\u0107 w\u0142asna
+// (1..3650); DOMY\u015bLNIE 7 DNI (feedback t.4/t.5). Legacy 0 ("bez
+// limitu") traktowane jak domy\u015blne 7 dni - opcja znikn\u0119\u0142a z menu, a
+// samoczynnie pokazuj\u0105ce si\u0119 pole "w\u0142asne" wygl\u0105da\u0142o \u017ale.
+const SNAPSHOT_PRUNE_CHECK_MS = 60 * 60 * 1000; // przegl\u0105d co godzin\u0119
+const SNAPSHOT_RETENTION_MAX_DAYS = 3650; // rozs\u0105dny sufit dla "w\u0142asnych" warto\u015bci
+
+async function pruneSnapshots() {
+  try {
+    const data = await chrome.storage.local.get(['sites', 'snapshotRetentionDays', 'snapshotPruneTime']);
+    const now = Date.now();
+    // Throttling: alarm wizard_cleanup odpala nas co minut\u0119 \u2014 realne
+    // kasowanie sprawdzamy najwy\u017cej raz na godzin\u0119.
+    if (data.snapshotPruneTime && now - data.snapshotPruneTime < SNAPSHOT_PRUNE_CHECK_MS) return;
+    const raw = data.snapshotRetentionDays;
+    // Brak zapisu, 0 (legacy "bez limitu") albo warto\u015b\u0107 niepoprawna =
+    // domy\u015blne 7 dni (feedback t.5); liczba dodatnia = limit w dniach,
+    // docinany do 3650, \u017ceby liter\u00f3wka/Hand-edit nie zrobi\u0142
+    // "limitu na 1000 lat".
+    const days = Number(raw) > 0 ? Math.min(Number(raw), SNAPSHOT_RETENTION_MAX_DAYS) : 7;
+    if (days > 0) {
+      const cutoff = now - days * 24 * 60 * 60 * 1000;
+      const sites = data.sites || [];
+      let touched = false;
+      for (const site of sites) {
+        // Rekord sprzed aktualizacji nie ma znacznik\u00f3w czasu snapshot\u00f3w:
+        // timing bierzemy z changedAt/lastCheckTime, \u017ceby upgrade nie
+        // skasowa\u0142 nikomu wersji "w dniu zero".
+        const prevTs = site.prevSnapshotTs || site.changedAt || site.lastCheckTime || now;
+        const lastTs = site.lastSnapshotTs || site.lastCheckTime || now;
+        if (site.prevSnapshot && prevTs < cutoff) {
+          site.prevSnapshot = ''; site.prevSnapshotTs = null; touched = true;
+        }
+        if (site.lastSnapshot && lastTs < cutoff) {
+          site.lastSnapshot = ''; site.lastSnapshotTs = null; touched = true;
+        }
+      }
+      if (touched) await chrome.storage.local.set({ sites });
+    }
+    await chrome.storage.local.set({ snapshotPruneTime: now });
+  } catch (err) { /* best-effort: nast\u0119pny alarm spr\u00f3buje ponownie */ }
+}
+
+// Audyt C \u2014 globalne czyszczenie danych (Settings \u2192 Delete all data).
+// Nieodwracalne: kasuje strony, snapshoty, grupy, szkice kreatora/pickera
+// i znaczniki tymczasowe. Zostaj\u0105 tylko preferencje interfejsu (j\u0119zyk,
+// motyw, retencja) \u2014 to nie s\u0105 dane monitorowania. Pod withStorageLock,
+// \u017ceby \u017caden trwaj\u0105cy check nie nadpisa\u0142 czystego storage star\u0105 tablic\u0105.
+async function handleWipeAllData() {
+  return withStorageLock(async () => {
+    const prefs = await chrome.storage.local.get(['language', 'theme', 'snapshotRetentionDays']);
+    await chrome.alarms.clearAll();
+    await chrome.storage.local.clear();
+    if (prefs && Object.keys(prefs).length) await chrome.storage.local.set(prefs);
+    // Bez stron: setupAlarms odtwarza tylko wizard_cleanup i zeruje badge.
+    await setupAlarms();
+    return { ok: true };
   });
 }
 
@@ -1078,9 +1149,15 @@ function sanitizeSiteInput(raw) {
   // Optional CSS selector: monitor only a fragment of the page (e.g. the
   // results table), not the whole body incl. navigation. Works in both
   // modes (fast mode parses the fetched HTML in an offscreen document).
-  let selector = String(s.selector || '').trim().slice(0, 200);
-  if (selector && !/^[a-zA-Z0-9 #.\[\]:\-_>"'=()~*,+|^$\\\/]+$/.test(selector)) {
-    selector = '';
+  // Audit 2.0.0/P1: a bad or over-long selector must FAIL LOUDLY. The old
+  // code silently blanked it (=> whole-page monitoring) and silently
+  // truncated >200 chars. Unicode letters/digits (\p{L}\p{N}) are now
+  // allowed so class names in any alphabet pass; the offscreen
+  // querySelector stays the final runtime judge of CSS syntax.
+  const selector = String(s.selector || '').trim();
+  if (selector.length > 200) return { invalidSelector: true };
+  if (selector && !/^[\p{L}\p{N} #.\[\]:_>"'=()~*,+|^$\\\/-]+$/u.test(selector)) {
+    return { invalidSelector: true };
   }
 
   // Custom interval (minutes): whole number 1..7 days, else ignored (preset used).
@@ -1117,6 +1194,9 @@ function sanitizeSiteInput(raw) {
 async function handleSaveSite(msg) {
   const raw = (msg && msg.site) || {};
   const input = sanitizeSiteInput(raw);
+  // Audit 2.0.0/P1: bad selector -> explicit error (popup shows
+  // errSelectorInvalid), never a silent whole-page fallback.
+  if (input && input.invalidSelector) return { ok: false, error: 'invalidSelector' };
   if (!input) return { ok: false, error: 'invalid' };
 
   const id = raw.id ? String(raw.id) : '';
@@ -1242,7 +1322,10 @@ async function handleImportSites(msg) {
       if (sites.length >= MAX_SITES) { skippedByReason.limit++; continue; }
 
       const input = sanitizeSiteInput(raw);
-      if (!input) { skippedByReason.invalid++; continue; }
+      // Audit 2.0.0/P1: an invalid selector counts as "invalid" (row skipped,
+      // reported in the import summary) instead of silently dropping the
+      // selector and importing a whole-page monitor.
+      if (!input || input.invalidSelector) { skippedByReason.invalid++; continue; }
 
       const identity = siteIdentity(input.url);
       if (seen.has(identity)) { skippedByReason.duplicate++; continue; }
@@ -1548,6 +1631,8 @@ function pickerHintText(lang) {
 // what would actually be monitored, so mode/selector problems surface BEFORE saving.
 async function handlePreviewSite(msg) {
   const input = sanitizeSiteInput({ name: 'preview', ...((msg && msg.site) || {}) });
+  // Audit 2.0.0/P1: surface a bad selector in the "Test" result too.
+  if (input && input.invalidSelector) return { ok: false, error: 'invalidSelector' };
   if (!input) return { ok: false, error: 'invalid' };
 
   const controller = new AbortController();

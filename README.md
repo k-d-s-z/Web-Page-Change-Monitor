@@ -30,7 +30,7 @@
 - **Context menu** — "Monitor this page" from any page
 - **Light / dark themes** (full support for both, choice persisted)
 - **PL / EN language** (whole UI, including notifications)
-- **Settings backup** — JSON export/import with full validation (2 MB limit, version and duplicate checks)
+- **Settings backup** — JSON export/import with full validation (2 MB limit, version and duplicate checks). Backups can also carry the optional per-site "opened page" address (`openUrl`); there is no dedicated form field for it, but a value set through a backup is preserved when editing the site
 
 ### Installation (developer mode)
 
@@ -46,9 +46,8 @@ Requires Chrome 116 or newer (offscreen documents, Manifest V3).
 1. Click the extension icon, or use the "Monitor this page" context menu
 2. The wizard opens in a new tab: provide a name, URL and check frequency
 3. **Monitor only a part of the page (optional)** — click "Pick element on the page" and select the element visually, or type a CSS selector (e.g. `#content, .results, main`); leave empty for the whole page
-4. **Opened page (optional)** — the address that opens when you click the card or a notification; useful when the monitored URL is a raw data endpoint (JSON)
-5. The first check stores a baseline; subsequent checks detect changes
-6. Click "View changes" on a card to open the diff view
+4. The first check stores a baseline; subsequent checks detect changes
+5. Click "View changes" on a card to open the diff view
 
 **Tip:** if a card shows "Looks JS-rendered", edit the monitor and enable "Rendered page mode".
 
@@ -60,6 +59,9 @@ Requires Chrome 116 or newer (offscreen documents, Manifest V3).
 - Fast mode fetches the page like a regular browser request; the "Require cookies" option decides whether your session is included
 - Rendered mode **always uses your browser session** (it opens a real tab) and cannot run cookieless — assume the page sees you as on a normal visit
 - Monitoring `http://` pages with cookies is blocked (protects your session)
+- Adding a **local or private address** (localhost, LAN IP such as a router) shows an explicit warning that must be confirmed — monitoring your own devices is allowed, but it is always a deliberate choice
+- Stored page versions (diff preview) are kept for a configurable retention period (Settings → Privacy and data: 7 days by default, or 30/90/custom days). The cleanup runs silently in the background; only old versions are removed, never the monitored page itself
+- "Delete all data" (Settings → Privacy and data) permanently removes every monitored page, its stored versions, groups and drafts in one click; interface preferences (language, theme) stay
 
 ### Permissions and why
 
@@ -87,7 +89,7 @@ drag.js         — drag & drop reordering
 diff.html/.js   — diff view page
 offscreen.js/.html — hidden document that extracts the selected fragment
 i18n.js         — PL/EN translations
-storage.js      — popup ↔ service worker messaging
+storage.js      — popup ↔ service worker messaging + shared local/LAN address helper
 theme.css       — light/dark theme variables
 manifest.json   — Manifest V3, version 2.0.0
 ```
@@ -126,7 +128,7 @@ GPL-3.0 — see `LICENSE` for details.
 - **Menu kontekstowe** — „Monitoruj stronę” z poziomu dowolnej strony
 - **Motywy** jasny / ciemny (pełne wsparcie obu, zapamiętywanie wyboru)
 - **Język** PL / EN (cały interfejs, łącznie z powiadomieniami)
-- **Kopia zapasowa ustawień** — eksport/import JSON z pełną walidacją (limit 2 MB, kontrola wersji i duplikatów)
+- **Kopia zapasowa ustawień** — eksport/import JSON z pełną walidacją (limit 2 MB, kontrola wersji i duplikatów). Kopia może przenosić także opcjonalny adres „otwieranej strony" (`openUrl`); nie ma dla niego osobnego pola w formularzu, ale wartość ustawiona przez kopię jest zachowywana przy edycji strony
 
 ### Instalacja (deweloperska)
 
@@ -142,9 +144,8 @@ Wymaga Chrome 116 lub nowszego (dokumenty offscreen, Manifest V3).
 1. Kliknij ikonę rozszerzenia lub użyj menu kontekstowego „Monitoruj stronę”
 2. W nowej karcie otworzy się kreator: podaj nazwę, adres URL i częstotliwość sprawdzania
 3. **Monitorowanie fragmentu (opcjonalnie)** — kliknij „Wybierz element na stronie” i wskaż element wizualnie albo wpisz selektor CSS (np. `#content, .results, main`); puste pole oznacza całą stronę
-4. **Otwierana strona (opcjonalnie)** — adres, który otworzy się po kliknięciu karty lub powiadomienia; przydaje się, gdy monitorowany adres jest surowym źródłem danych (endpoint JSON)
-5. Pierwsze sprawdzenie zapisuje stan bazowy; kolejne wykrywają zmiany
-6. Kliknij „Zobacz zmiany” na karcie, aby otworzyć widok różnic
+4. Pierwsze sprawdzenie zapisuje stan bazowy; kolejne wykrywają zmiany
+5. Kliknij „Zobacz zmiany” na karcie, aby otworzyć widok różnic
 
 **Wskazówka:** jeśli karta strony pokaże komunikat „Wygląda na rysowaną przez JS”, edytuj monitor i zaznacz „Tryb strony renderowanej”.
 
@@ -156,6 +157,9 @@ Wymaga Chrome 116 lub nowszego (dokumenty offscreen, Manifest V3).
 - Tryb szybki pobiera stronę tak jak zwykłe żądanie przeglądarki; opcja „Wymagaj ciasteczek” decyduje, czy dołączana jest Twoja sesja
 - Tryb renderowany **zawsze korzysta z sesji przeglądarki** (otwiera realną kartę) — nie da się go uruchomić bez ciasteczek; zakładaj, że strona widzi Cię tak, jak przy zwykłej wizycie
 - Monitorowanie po `http://` z ciasteczkami jest blokowane (ochrona sesji przed zapisem w formie niezaszyfrowanej)
+- Dodanie **adresu lokalnego lub prywatnego** (localhost, adres IP w sieci LAN, np. router) pokazuje jawne ostrzeżenie wymagające potwierdzenia — monitorowanie własnych urządzeń jest możliwe, ale zawsze świadome
+- Zapisane wersje stron (do podglądu zmian) są przechowywane przez konfigurowalny okres retencji (Ustawienia → Prywatność i dane: domyślnie 7 dni, opcjonalnie 30/90 dni lub wartość własna). Sprzątanie odbywa się po cichu w tle; usuwane są tylko stare wersje, nigdy sama monitorowana strona
+- „Usuń wszystkie dane” (Ustawienia → Prywatność i dane) trwale usuwa wszystkie monitorowane strony, ich zapisane wersje, grupy i szkice jednym kliknięciem; preferencje interfejsu (język, motyw) zostają
 
 ### Uprawnienia i dlaczego
 
@@ -183,7 +187,7 @@ drag.js         — przestawianie kolejności
 diff.html/.js   — strona podglądu różnic
 offscreen.js/.html — ukryty dokument wyodrębniający wybrany fragment
 i18n.js         — tłumaczenia PL/EN
-storage.js      — komunikacja popup ↔ service worker
+storage.js      — komunikacja popup ↔ service worker + współdzielony helper adresów lokalnych/sieciowych
 theme.css       — zmienne motywu jasny/ciemny
 manifest.json   — Manifest V3, wersja 2.0.0
 ```

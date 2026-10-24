@@ -39,6 +39,8 @@ const checkingIds = new Set();
 let drag = null;
 let suppressClick = false;
 let pendingHttpConfirm = null;
+// Audyt#4: dwuklikowe potwierdzenie adresu lokalnego/prywatnego (jak http://).
+let pendingLocalConfirm = null;
 let isRefreshingAll = false;
 let refreshTracker = null;
 let activeSiteCount = 0;
@@ -305,10 +307,50 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-restore').addEventListener('click', () => document.getElementById('restore-file-input').click());
   document.getElementById('restore-file-input').addEventListener('change', restoreBackup);
 
+  // Audyt C + 2.0.0 (feedback t.4/t.5): retencja wersji stron (zapis
+  // ustawienia, logik\u0119 kasowania w\u0142a\u015bciwie wykonuje t\u0142o) oraz przycisk
+  // globalnego czyszczenia danych. DOMY\u015bLNIE 7 DNI; presety 7/30/90,
+  // warto\u015b\u0107 "w\u0142asna" (1..3650 dni) w polu liczbowym. Pole liczbowe
+  // pokazuje si\u0119 TYLKO po jawnym wyborze "w\u0142asne" - stare/zero warto\u015bci
+  // (legacy "bez limitu") pokazuj\u0105 si\u0119 jako domy\u015blne 7 dni (feedback t.5:
+  // samoczynnie wyskakuj\u0105ce pole wygl\u0105da\u0142o \u017ale).
+  const retentionSel = document.getElementById('snapshot-retention');
+  const retentionCustomRow = document.getElementById('retention-custom-row');
+  const retentionCustomInput = document.getElementById('retention-custom-days');
+  const storedDays = Number((await chrome.storage.local.get('snapshotRetentionDays')).snapshotRetentionDays);
+  const days = storedDays >= 1 ? storedDays : 7;
+  const isPreset = days === 7 || days === 30 || days === 90;
+  retentionSel.value = isPreset ? String(days) : 'custom';
+  if (!isPreset) retentionCustomInput.value = String(days);
+  retentionCustomRow.classList.toggle('visible', retentionSel.value === 'custom');
+  retentionSel.addEventListener('change', async () => {
+    retentionCustomRow.classList.toggle('visible', retentionSel.value === 'custom');
+    if (retentionSel.value === 'custom') {
+      retentionCustomInput.focus();
+      return; // przy "w\u0142asne" zapisujemy dopiero przy zatwierdzeniu liczby
+    }
+    await chrome.storage.local.set({ snapshotRetentionDays: parseInt(retentionSel.value, 10) });
+  });
+  retentionCustomInput.addEventListener('change', async () => {
+    const custom = parseInt(retentionCustomInput.value, 10);
+    if (Number.isNaN(custom) || custom < 1) {
+      // puste/zerowe "w\u0142asne" = wracamy do domy\u015blnych 7 dni
+      retentionSel.value = '7';
+      retentionCustomRow.classList.remove('visible');
+      await chrome.storage.local.set({ snapshotRetentionDays: 7 });
+      return;
+    }
+    const capped = Math.min(custom, 3650);
+    retentionCustomInput.value = String(capped);
+    await chrome.storage.local.set({ snapshotRetentionDays: capped });
+  });
+  document.getElementById('btn-wipe-data').addEventListener('click', wipeDataClick);
+
   chrome.storage.onChanged.addListener(onStorageChanged);
 
   document.getElementById('site-url').addEventListener('input', () => {
     pendingHttpConfirm = null;
+    pendingLocalConfirm = null;
     clearFormMessage();
   });
 
@@ -935,6 +977,9 @@ async function testSite() {
     const raw = (res && res.error) || '';
     if (raw === 'invalid') {
       showFormMessage(urlObj.protocol === 'http:' ? t.errHttpCookiesBlocked : t.alertInvalidUrl);
+    } else if (raw === 'invalidSelector') {
+      // Audit 2.0.0/P1: selector rejected by the background - say it plainly.
+      showFormMessage(t.errSelectorInvalid);
     } else if (!rendered && /^Selector not found/i.test(raw)) {
       document.getElementById('site-rendered').checked = true;
       syncRenderedUI();
@@ -969,6 +1014,7 @@ function showForm(site = null, prefill = null) {
   const t = TRANSLATIONS[currentLang];
 
   pendingHttpConfirm = null;
+  pendingLocalConfirm = null;
   clearFormMessage();
   hideTestResult();
   document.getElementById('view-list').style.display = 'none';
@@ -1246,6 +1292,7 @@ function saveErrorMessage(res) {
   switch (res && res.error) {
     case 'duplicate': return t.errDuplicate;
     case 'limit': return t.errLimit;
+    case 'invalidSelector': return t.errSelectorInvalid;
     case 'invalid': return t.alertInvalidUrl;
     default: return t.errSave;
   }
@@ -1309,6 +1356,14 @@ async function saveSite() {
     return;
   }
 
+  // Audyt#4: adres lokalny/prywatny (localhost, router w LAN) \u2014 legalny use
+  // case, nie blokujemy, ale zapis musi by\u0107 \u015bwiadomy (dwuklik jak http://).
+  if (isPrivateOrLocalUrl(url) && pendingLocalConfirm !== url) {
+    pendingLocalConfirm = url;
+    showFormMessage(t.warnPrivate, 'warn');
+    return;
+  }
+
   // Ask for the host permission FIRST (still inside the click's user gesture)
   // so a refusal never leaves a half-saved page behind.
   // contains() first: with install-time host_permissions it is always true,
@@ -1350,6 +1405,46 @@ async function saveSite() {
   }
   await showList();
   if (res.needsBaseline) triggerCheck(res.siteId);
+}
+
+
+// Audyt C: globalne czyszczenie danych - wzorzec dwuklikowy (jak ostrzezenia
+// http:// i adresow lokalnych), bo operacja jest nieodwracalna i kasuje
+// WSZYSTKO. Pierwszy klik uzbraja przycisk na 5 s, drugi wykonuje.
+let wipeConfirmPending = false;
+let wipeConfirmTimer = null;
+
+function resetWipeConfirm() {
+  wipeConfirmPending = false;
+  if (wipeConfirmTimer) { clearTimeout(wipeConfirmTimer); wipeConfirmTimer = null; }
+  const btn = document.getElementById('btn-wipe-data');
+  if (btn) {
+    btn.classList.remove('pending');
+    btn.textContent = TRANSLATIONS[currentLang].btnWipeData;
+  }
+}
+
+async function wipeDataClick() {
+  const t = TRANSLATIONS[currentLang];
+  const btn = document.getElementById('btn-wipe-data');
+  if (!btn) return;
+  if (!wipeConfirmPending) {
+    wipeConfirmPending = true;
+    btn.classList.add('pending');
+    btn.textContent = t.btnWipeDataConfirm;
+    wipeConfirmTimer = setTimeout(resetWipeConfirm, 5000);
+    return;
+  }
+  resetWipeConfirm();
+  btn.disabled = true;
+  const res = await callBackground({ action: 'wipeAllData' });
+  btn.disabled = false;
+  if (res && res.ok) {
+    showSummary(t.wipeDone, 'ok', SUMMARY_HIDE_MS * 2);
+    await renderSites();
+  } else {
+    showSummary(t.errRefresh, 'warn', SUMMARY_HIDE_MS);
+  }
 }
 
 
@@ -1399,11 +1494,23 @@ function showUndoSummary(site, index, group = null) {
         showSummary(t.undoFailed, 'warn', SUMMARY_HIDE_MS);
         return;
       }
+      // Audit 2.0.0/P2: no unconditional success - if the permission
+      // re-grant was refused, the restored record has no access to its
+      // origin and checks will keep failing. Edit+save re-requests it.
+      let accessOk = true;
       if (res.origins && res.origins.length > 0) {
-        try { await chrome.permissions.request({ origins: res.origins }); } catch (e) { /* best effort */ }
+        try {
+          accessOk = Boolean(await chrome.permissions.request({ origins: res.origins }));
+        } catch (e) {
+          accessOk = false;
+        }
       }
       changedOnly = false;
       await renderSites();
+      if (!accessOk) {
+        showSummary(t.undoDoneNoAccess, 'warn', SUMMARY_HIDE_MS * 3);
+        return;
+      }
       showSummary(t.undoDone, 'ok', SUMMARY_HIDE_MS);
     })
   ], 'warn', SUMMARY_HIDE_MS * 3);
