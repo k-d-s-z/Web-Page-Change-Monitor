@@ -4,7 +4,8 @@
   "description": "Web Page Change Monitor Extension",
   "main": "background.js",
   "scripts": {
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --test test/"
   },
   "license": "GPL-3.0-only",
   "type": "commonjs",

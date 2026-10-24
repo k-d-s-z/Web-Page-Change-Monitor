@@ -824,8 +824,40 @@ function commitNotModified(siteId, expected, fetchResult) {
 const SNAPSHOT_PRUNE_CHECK_MS = 60 * 60 * 1000; // przegl\u0105d co godzin\u0119
 const SNAPSHOT_RETENTION_MAX_DAYS = 3650; // rozs\u0105dny sufit dla "w\u0142asnych" warto\u015bci
 
+// Czysta funkcja planowania retencji: zwraca NOW\u0105 tablic\u0119 (bez mutacji
+// wej\u015bcia) i flag\u0119 touched. Wydzielona pod Audyt 2.0.0 (2)/P1, \u017ceby
+// regu\u0142y ci\u0119cia da\u0142o si\u0119 testowa\u0107 wprost (test/prune.test.js, npm test).
+function planSnapshotPrune(sites, days, now) {
+  const cutoff = now - days * 24 * 60 * 60 * 1000;
+  // Rekord sprzed aktualizacji nie ma znacznik\u00f3w czasu snapshot\u00f3w:
+  // timing bierzemy z changedAt/lastCheckTime, \u017ceby upgrade nie
+  // skasowa\u0142 nikomu wersji "w dniu zero".
+  const out = sites.map((site) => {
+    if (!site) return site;
+    const prevTs = site.prevSnapshotTs || site.changedAt || site.lastCheckTime || now;
+    const lastTs = site.lastSnapshotTs || site.lastCheckTime || now;
+    const dropPrev = Boolean(site.prevSnapshot) && prevTs < cutoff;
+    const dropLast = Boolean(site.lastSnapshot) && lastTs < cutoff;
+    if (!dropPrev && !dropLast) return site;
+    return {
+      ...site,
+      prevSnapshot: dropPrev ? '' : site.prevSnapshot,
+      prevSnapshotTs: dropPrev ? null : site.prevSnapshotTs,
+      lastSnapshot: dropLast ? '' : site.lastSnapshot,
+      lastSnapshotTs: dropLast ? null : site.lastSnapshotTs,
+    };
+  });
+  const touched = out.some((s, i) => s !== sites[i]);
+  return { sites: out, touched };
+}
+
 async function pruneSnapshots() {
-  try {
+  // Audyt 2.0.0 (2)/P1: odczyt-modyfikacja-zapis "sites" przebiega pod
+  // withStorageLock \u2014 bez tego sprz\u0105tanie mog\u0142o nadpisa\u0107 nowszy stan
+  // zapisany w mi\u0119dyczasie przez trwaj\u0105cy check albo edycj\u0119 listy
+  // (read-modify-write poza kolejk\u0105 gubi\u0142 r\u00f3wnoleg\u0142e aktualizacje).
+  // Test modelowy blokady: test/prune.test.js.
+  return withStorageLock(async () => {
     const data = await chrome.storage.local.get(['sites', 'snapshotRetentionDays', 'snapshotPruneTime']);
     const now = Date.now();
     // Throttling: alarm wizard_cleanup odpala nas co minut\u0119 \u2014 realne
@@ -834,30 +866,15 @@ async function pruneSnapshots() {
     const raw = data.snapshotRetentionDays;
     // Brak zapisu, 0 (legacy "bez limitu") albo warto\u015b\u0107 niepoprawna =
     // domy\u015blne 7 dni (feedback t.5); liczba dodatnia = limit w dniach,
-    // docinany do 3650, \u017ceby liter\u00f3wka/Hand-edit nie zrobi\u0142
+    // docinany do 3650, \u017ceby liter\u00f3wka/hand-edit nie zrobi\u0142
     // "limitu na 1000 lat".
     const days = Number(raw) > 0 ? Math.min(Number(raw), SNAPSHOT_RETENTION_MAX_DAYS) : 7;
     if (days > 0) {
-      const cutoff = now - days * 24 * 60 * 60 * 1000;
-      const sites = data.sites || [];
-      let touched = false;
-      for (const site of sites) {
-        // Rekord sprzed aktualizacji nie ma znacznik\u00f3w czasu snapshot\u00f3w:
-        // timing bierzemy z changedAt/lastCheckTime, \u017ceby upgrade nie
-        // skasowa\u0142 nikomu wersji "w dniu zero".
-        const prevTs = site.prevSnapshotTs || site.changedAt || site.lastCheckTime || now;
-        const lastTs = site.lastSnapshotTs || site.lastCheckTime || now;
-        if (site.prevSnapshot && prevTs < cutoff) {
-          site.prevSnapshot = ''; site.prevSnapshotTs = null; touched = true;
-        }
-        if (site.lastSnapshot && lastTs < cutoff) {
-          site.lastSnapshot = ''; site.lastSnapshotTs = null; touched = true;
-        }
-      }
-      if (touched) await chrome.storage.local.set({ sites });
+      const plan = planSnapshotPrune(data.sites || [], days, now);
+      if (plan.touched) await chrome.storage.local.set({ sites: plan.sites });
     }
     await chrome.storage.local.set({ snapshotPruneTime: now });
-  } catch (err) { /* best-effort: nast\u0119pny alarm spr\u00f3buje ponownie */ }
+  }).catch(() => { /* best-effort: nast\u0119pny alarm spr\u00f3buje ponownie */ });
 }
 
 // Audyt C \u2014 globalne czyszczenie danych (Settings \u2192 Delete all data).
