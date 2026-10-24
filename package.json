@@ -5,7 +5,7 @@
   "main": "background.js",
   "scripts": {
     "lint": "eslint .",
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "license": "GPL-3.0-only",
   "type": "commonjs",
