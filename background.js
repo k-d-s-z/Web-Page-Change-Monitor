@@ -1,3 +1,8 @@
+// Shared helpers live in storage.js (also <script>-loaded by popup.html).
+// The service worker needs isPrivateOrLocalUrl to flag local/private
+// addresses in imported backups (Audit #4/P2).
+importScripts('storage.js');
+
 const FREQ_MAP = [1, 5, 10, 60, 1440];
 const FETCH_TIMEOUT_MS = 30000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -1146,6 +1151,11 @@ function sanitizeSiteInput(raw) {
   // egzekwowana te\u017c tutaj (import z backupu omija popup.js).
   if (parsed.protocol === 'http:' && requireCookies) return null;
 
+  // Audit #4/P1: URLs with embedded credentials (user:pass@host) are rejected.
+  // fetch() never sends them as auth, so they only leak - into backups, logs
+  // and the UI. Wizard/edit/import show errUrlCredentials / skip the row.
+  if (parsed.username || parsed.password) return { invalidCredentials: true };
+
   let freqIndex = parseInt(s.freqIndex, 10);
   if (!(freqIndex >= 0 && freqIndex < FREQ_MAP.length)) freqIndex = 2;
 
@@ -1158,6 +1168,9 @@ function sanitizeSiteInput(raw) {
     try {
       const p = new URL(openUrl);
       if (p.protocol !== 'http:' && p.protocol !== 'https:') openUrl = '';
+      // Audit #4/P1: same rule as the monitored URL - no embedded
+      // user:pass@; fall back to the monitored URL instead.
+      else if (p.username || p.password) openUrl = '';
     } catch (e) {
       openUrl = '';
     }
@@ -1214,6 +1227,9 @@ async function handleSaveSite(msg) {
   // Audit 2.0.0/P1: bad selector -> explicit error (popup shows
   // errSelectorInvalid), never a silent whole-page fallback.
   if (input && input.invalidSelector) return { ok: false, error: 'invalidSelector' };
+  // Audit #4/P1: explicit error for user:pass@ URLs (popup/wizard show
+  // errUrlCredentials).
+  if (input && input.invalidCredentials) return { ok: false, error: 'invalidCredentials' };
   if (!input) return { ok: false, error: 'invalid' };
 
   const id = raw.id ? String(raw.id) : '';
@@ -1333,7 +1349,10 @@ async function handleImportSites(msg) {
 
     const addedOrigins = [];
     const addedIds = [];
-    const skippedByReason = { limit: 0, invalid: 0, duplicate: 0 };
+    const skippedByReason = { limit: 0, invalid: 0, credentials: 0, duplicate: 0 };
+    // Audit #4/P2: how many of the ADDED pages point at local/private
+    // addresses (e.g. a router). The popup shows a heads-up note for those.
+    let localCount = 0;
 
     for (const raw of incoming) {
       if (sites.length >= MAX_SITES) { skippedByReason.limit++; continue; }
@@ -1342,6 +1361,9 @@ async function handleImportSites(msg) {
       // Audit 2.0.0/P1: an invalid selector counts as "invalid" (row skipped,
       // reported in the import summary) instead of silently dropping the
       // selector and importing a whole-page monitor.
+      // Audit #4/P1: user:pass@ URLs get their own skip reason so the
+      // summary can say why the row was dropped.
+      if (input && input.invalidCredentials) { skippedByReason.credentials++; continue; }
       if (!input || input.invalidSelector) { skippedByReason.invalid++; continue; }
 
       const identity = siteIdentity(input.url);
@@ -1387,12 +1409,13 @@ async function handleImportSites(msg) {
       let urlObj;
       try { urlObj = new URL(input.url); } catch (e) { urlObj = null; }
       if (urlObj) addedOrigins.push(`${urlObj.protocol}//${urlObj.host}/*`);
+      if (isPrivateOrLocalUrl(input.url)) localCount++;
       addedIds.push(siteId);
     }
 
-    const skippedCount = skippedByReason.limit + skippedByReason.invalid + skippedByReason.duplicate;
+    const skippedCount = skippedByReason.limit + skippedByReason.invalid + skippedByReason.credentials + skippedByReason.duplicate;
     await chrome.storage.local.set({ sites, groups });
-    return { addedCount: addedIds.length, skippedCount, skippedByReason, origins: [...new Set(addedOrigins)], addedIds };
+    return { addedCount: addedIds.length, skippedCount, skippedByReason, localCount, origins: [...new Set(addedOrigins)], addedIds };
   });
 
   await setupAlarms();
@@ -1650,6 +1673,8 @@ async function handlePreviewSite(msg) {
   const input = sanitizeSiteInput({ name: 'preview', ...((msg && msg.site) || {}) });
   // Audit 2.0.0/P1: surface a bad selector in the "Test" result too.
   if (input && input.invalidSelector) return { ok: false, error: 'invalidSelector' };
+  // Audit #4/P1: user:pass@ URLs are rejected here as well.
+  if (input && input.invalidCredentials) return { ok: false, error: 'invalidCredentials' };
   if (!input) return { ok: false, error: 'invalid' };
 
   const controller = new AbortController();

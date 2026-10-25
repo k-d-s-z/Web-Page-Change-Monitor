@@ -709,6 +709,7 @@ function skipReasonDetail(byReason, t) {
   if (byReason.duplicate) bits.push(`${t.skipReasonDuplicate}: ${byReason.duplicate}`);
   if (byReason.limit) bits.push(`${t.skipReasonLimit}: ${byReason.limit}`);
   if (byReason.invalid) bits.push(`${t.skipReasonInvalid}: ${byReason.invalid}`);
+  if (byReason.credentials) bits.push(`${t.skipReasonCredentials}: ${byReason.credentials}`);
   return bits.length ? ` (${bits.join(', ')})` : '';
 }
 
@@ -779,8 +780,12 @@ async function restoreBackup(e) {
     const parts = [`${t.restoreAdded}: ${res.addedCount}`];
     if (res.skippedCount) parts.push(`${t.restoreSkipped}: ${res.skippedCount}${skipReasonDetail(res.skippedByReason, t)}`);
     let text2 = parts.join(' \u2022 ');
+    // Audit #4/P2: imported backups can silently bring local/private
+    // addresses (e.g. a router). The wizard/edit forms warn about them;
+    // the import path gets a heads-up note in the summary.
+    if (res.localCount > 0) text2 += ` \u2014 ${t.importLocalWarning.replace('{count}', String(res.localCount))}`;
     if (permissionPending) text2 += ` \u2014 ${t.restorePermissionPending}`;
-    showSummary(text2, permissionPending ? 'warn' : 'ok', SUMMARY_HIDE_MS * 2);
+    showSummary(text2, permissionPending || res.localCount > 0 ? 'warn' : 'ok', SUMMARY_HIDE_MS * 2);
 
     if (!permissionPending && Array.isArray(res.addedIds) && res.addedIds.length > 0) {
       res.addedIds.forEach((id) => checkingIds.add(id));
@@ -980,6 +985,9 @@ async function testSite() {
     } else if (raw === 'invalidSelector') {
       // Audit 2.0.0/P1: selector rejected by the background - say it plainly.
       showFormMessage(t.errSelectorInvalid);
+    } else if (raw === 'invalidCredentials') {
+      // Audit #4/P1: user:pass@ in the URL - say it plainly.
+      showFormMessage(t.errUrlCredentials);
     } else if (!rendered && /^Selector not found/i.test(raw)) {
       document.getElementById('site-rendered').checked = true;
       syncRenderedUI();
@@ -1293,6 +1301,7 @@ function saveErrorMessage(res) {
     case 'duplicate': return t.errDuplicate;
     case 'limit': return t.errLimit;
     case 'invalidSelector': return t.errSelectorInvalid;
+    case 'invalidCredentials': return t.errUrlCredentials;
     case 'invalid': return t.alertInvalidUrl;
     default: return t.errSave;
   }
