@@ -171,3 +171,25 @@ test('sanitizeSiteInput: openUrl javascript: -> fallback na monitorowany URL', (
   const s = sanitizeSiteInput({ name: 'T', url: 'https://m.example/', openUrl: 'javascript:alert(1)' });
   assert.ok(s && s.openUrl === 'https://m.example/' && s.openUrlCustom === false);
 });
+
+// --- sanitizeSiteInput: dane logowania w URL (Audyt #4/P1) ---
+
+test('sanitizeSiteInput: URL z user:pass@ -> invalidCredentials', () => {
+  const s = sanitizeSiteInput({ name: 'T', url: 'https://user:pass@example.com/' });
+  assert.deepEqual(s, { invalidCredentials: true });
+});
+
+test('sanitizeSiteInput: URL z samym userem@ -> invalidCredentials', () => {
+  const s = sanitizeSiteInput({ name: 'T', url: 'https://admin@10.0.0.5/' });
+  assert.deepEqual(s, { invalidCredentials: true });
+});
+
+test('sanitizeSiteInput: URL z @ w sciezce jest OK (bez danych logowania)', () => {
+  const s = sanitizeSiteInput({ name: 'T', url: 'https://example.com/@user/profile' });
+  assert.ok(s && s.url === 'https://example.com/@user/profile');
+});
+
+test('sanitizeSiteInput: openUrl z user:pass@ -> fallback na monitorowany URL', () => {
+  const s = sanitizeSiteInput({ name: 'T', url: 'https://m.example/', openUrl: 'https://user:pass@view.example/' });
+  assert.ok(s && s.openUrl === 'https://m.example/' && s.openUrlCustom === false);
+});
