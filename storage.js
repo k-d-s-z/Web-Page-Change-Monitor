@@ -30,18 +30,29 @@ function isPrivateOrLocalUrl(url) {
     if (host === 'localhost' || host.endsWith('.localhost')) return true;
 
     // IPv6: URL.hostname trzyma nawiasy, np. [::1]; zdejmujemy je przed testem.
-    const v6 = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    let v6 = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
     if (v6.includes(':')) {
-      // "::", "::1" i każdy adres zaczynający się od "::" (np. ::ffff:10.0.0.1)
-      // to z definicji adresy specjalne — nie wychodzą do internetu.
-      if (v6.startsWith('::')) return true;
-      const first = parseInt(v6.split(':')[0], 16);
-      if (!Number.isNaN(first)) {
-        // fc00::/7 — adresy lokalne (ULA); fe80::/10 — link-local.
-        if ((first & 0xfe00) === 0xfc00) return true;
-        if ((first & 0xffc0) === 0xfe80) return true;
+      // Audyt #5/P2: IPv4-mapped (::ffff:a.b.c.d) dziedziczy klasyfikację po
+      // OSADZONYM adresie IPv4 — publiczny (np. ::ffff:8.8.8.8) to normalny
+      // adres internetu i nie może dawać fałszywego alarmu; prywatny
+      // (np. ::ffff:192.168.1.1) ostrzegamy jak zwykły adres LAN.
+      // WHATWG URL kanonizuje zakres ::ffff:0:0/96 na zapis kropkowy, więc
+      // wystarcza prosty wzorzec.
+      const mapped = v6.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+      if (mapped) {
+        v6 = mapped[1]; // klasyfikacja spada do wspólnych reguł IPv4 poniżej
+      } else {
+        // "::", "::1" i każdy pozostały adres zaczynający się od "::"
+        // to adresy specjalne — nie wychodzą do internetu.
+        if (v6.startsWith('::')) return true;
+        const first = parseInt(v6.split(':')[0], 16);
+        if (!Number.isNaN(first)) {
+          // fc00::/7 — adresy lokalne (ULA); fe80::/10 — link-local.
+          if ((first & 0xfe00) === 0xfc00) return true;
+          if ((first & 0xffc0) === 0xfe80) return true;
+        }
+        return false;
       }
-      return false;
     }
 
     // IPv4: sprawdzamy tylko pewne zakresy z RFC1918 + loopback/link-local.
