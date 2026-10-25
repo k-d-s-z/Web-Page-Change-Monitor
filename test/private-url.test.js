@@ -67,6 +67,23 @@ test('isPrivateOrLocalUrl: IPv6 loopback, ::, IPv4-mapped (startuja od ::)', () 
   priv('http://[::ffff:10.0.0.1]/');
 });
 
+test('isPrivateOrLocalUrl: IPv4-mapped z PUBLICZNYM IPv4 nie daje falszywego alarmu (Audyt #5/P2)', () => {
+  // Audyt #5/P2: ::ffff:8.8.8.8 to adres internetu (osadzony IPv4 jest
+  // publiczny) — szeroki warunek "zaczyna sie od ::" dawal falszywe
+  // ostrzezenie o adresie lokalnym.
+  pub('http://[::ffff:8.8.8.8]/');
+  pub('http://[::ffff:1.1.1.1]/');
+  pub('http://[::ffff:808:808]/'); // zapis szesnastkowy — WHATWG URL kanonizuje na ::ffff:8.8.8.8
+});
+
+test('isPrivateOrLocalUrl: IPv4-mapped z prywatnym IPv4 nadal ostrzega', () => {
+  priv('http://[::ffff:192.168.1.1]/');
+  priv('http://[::ffff:127.0.0.1]/');
+  priv('http://[::ffff:10.1.2.3]/');
+  priv('http://[::ffff:172.16.5.5]/');
+  priv('http://[::ffff:169.254.1.1]/');
+});
+
 test('isPrivateOrLocalUrl: IPv6 ULA fc00::/7 i link-local fe80::/10', () => {
   priv('http://[fc00::1]/');
   priv('http://[fd12:3456:789a::1]/'); // fd* to tez ULA (fc00::/7)
