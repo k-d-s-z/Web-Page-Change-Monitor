@@ -32,15 +32,26 @@ function isPrivateOrLocalUrl(url) {
     // IPv6: URL.hostname trzyma nawiasy, np. [::1]; zdejmujemy je przed testem.
     let v6 = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
     if (v6.includes(':')) {
-      // Audyt #5/P2: IPv4-mapped (::ffff:a.b.c.d) dziedziczy klasyfikację po
+      // Audyt #5/P2: IPv4-mapped (::ffff:0:0/96) dziedziczy klasyfikację po
       // OSADZONYM adresie IPv4 — publiczny (np. ::ffff:8.8.8.8) to normalny
       // adres internetu i nie może dawać fałszywego alarmu; prywatny
       // (np. ::ffff:192.168.1.1) ostrzegamy jak zwykły adres LAN.
-      // WHATWG URL kanonizuje zakres ::ffff:0:0/96 na zapis kropkowy, więc
-      // wystarcza prosty wzorzec.
-      const mapped = v6.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
-      if (mapped) {
-        v6 = mapped[1]; // klasyfikacja spada do wspólnych reguł IPv4 poniżej
+      // WHATWG URL (node i Chromium) serializuje ten zakres jako DWIE GRUPY
+      // szesnastkowe (::ffff:808:808); część środowisk utrzymuje zapis
+      // kropkowy — obsługujemy obie formy, potem wspólna logika IPv4.
+      let ipv4 = '';
+      const dotted = v6.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+      if (dotted) {
+        ipv4 = dotted[1];
+      } else {
+        const hextets = v6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+        if (hextets) {
+          const hi = parseInt(hextets[1], 16), lo = parseInt(hextets[2], 16);
+          ipv4 = (hi >>> 8) + '.' + (hi & 255) + '.' + (lo >>> 8) + '.' + (lo & 255);
+        }
+      }
+      if (ipv4) {
+        v6 = ipv4; // klasyfikacja spada do wspólnych reguł IPv4 poniżej
       } else {
         // "::", "::1" i każdy pozostały adres zaczynający się od "::"
         // to adresy specjalne — nie wychodzą do internetu.
