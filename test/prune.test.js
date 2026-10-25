@@ -263,3 +263,20 @@ test('statyczny straznik: pruneSnapshots korzysta z withStorageLock', () => {
   assert.ok(decl.includes('withStorageLock('),
     'pruneSnapshots pisze do "sites" bez withStorageLock — regresja P1 z audytu');
 });
+
+// Strażnik trybu renderowanego (lista regresji po audycie #5): ukryte okno
+// zminimalizowane/karta MUSI być sprzątane w finally — po każdym błędzie
+// (siec, DNS, przekierowanie, zamkniecie karty), inaczej wycieka okno.
+// Test czysto statyczny (okna nie da sie testowac w node), ale lapa regresje
+// kodu: usuniecie finally lub wywolan windows.remove/tabs.remove pada od razu.
+test('statyczny straznik: fetchRenderedInner sprzata okno/karte w finally', () => {
+  const decl = extractOne(backgroundSrc, 'fetchRenderedInner');
+  assert.ok(decl, 'brak deklaracji fetchRenderedInner w background.js');
+  const fi = decl.indexOf('finally');
+  assert.ok(fi !== -1, 'fetchRenderedInner nie ma bloku finally');
+  const tail = decl.slice(fi);
+  assert.ok(tail.includes('chrome.windows.remove('),
+    'finally nie usuwa okna (chrome.windows.remove) — wyciek okien po bledach trybu renderowanego');
+  assert.ok(tail.includes('chrome.tabs.remove('),
+    'finally nie usuwa karty zapasowej (chrome.tabs.remove) — wyciek kart po bledach trybu renderowanego');
+});
