@@ -370,6 +370,15 @@ async function wizardNext() {
     let urlObj;
     try { urlObj = new URL(url); } catch (err) { showWizardMessage(t.alertInvalidUrl); return; }
 
+    // Audit #4/P1: URLs with embedded credentials (user:pass@host) are
+    // rejected right here - at the URL step - not only at final save.
+    // The background enforces the same rule (sanitizeSiteInput), this is
+    // the early UX layer.
+    if (urlObj.username || urlObj.password) {
+      showWizardMessage(t.errUrlCredentials);
+      return;
+    }
+
     s.name = name;
     s.url = url;
     s.renderChecked = false;
