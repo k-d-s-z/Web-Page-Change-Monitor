@@ -63,7 +63,7 @@ Requires Chrome 116 or newer (offscreen documents, Manifest V3).
 - URLs with embedded login data (`user:password@host`) are rejected — such secrets would leak into backups, logs and the UI
 - Importing a backup reports how many of the restored addresses are local/private, and rows with embedded login data are skipped and listed in the import summary
 - Stored page versions (diff preview) are kept for a configurable retention period (Settings → Privacy and data: 7 days by default, or 30/90/custom days). The cleanup runs silently in the background; only old versions are removed, never the monitored page itself
-- "Delete all data" (Settings → Privacy and data) permanently removes every monitored page, its stored versions, groups and drafts in one click; interface preferences (language, theme) stay
+- "Delete all data" (Settings → Privacy and data) permanently removes every monitored page, its stored versions, groups and drafts in one click, and releases all granted page access (host permissions); interface preferences (language, theme) stay
 
 ### Permissions and why
 
@@ -164,7 +164,7 @@ Wymaga Chrome 116 lub nowszego (dokumenty offscreen, Manifest V3).
 - Adresy z danymi logowania (`użytkownik:hasło@`) są odrzucane — takie dane wyciekłyby do kopii zapasowych, logów i interfejsu
 - Import z kopii zapasowej informuje, ile przywróconych adresów jest lokalnych/prywatnych; rekordy z danymi logowania w adresie są pomijane i zgłaszane w podsumowaniu importu
 - Zapisane wersje stron (do podglądu zmian) są przechowywane przez konfigurowalny okres retencji (Ustawienia → Prywatność i dane: domyślnie 7 dni, opcjonalnie 30/90 dni lub wartość własna). Sprzątanie odbywa się po cichu w tle; usuwane są tylko stare wersje, nigdy sama monitorowana strona
-- „Usuń wszystkie dane” (Ustawienia → Prywatność i dane) trwale usuwa wszystkie monitorowane strony, ich zapisane wersje, grupy i szkice jednym kliknięciem; preferencje interfejsu (język, motyw) zostają
+- „Usuń wszystkie dane” (Ustawienia → Prywatność i dane) trwale usuwa wszystkie monitorowane strony, ich zapisane wersje, grupy i szkice jednym kliknięciem oraz cofa cały przyznany dostęp do stron (uprawnienia hostów); preferencje interfejsu (język, motyw) zostają
 
 ### Uprawnienia i dlaczego
 

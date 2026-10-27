@@ -888,15 +888,28 @@ async function pruneSnapshots() {
 // motyw, retencja) \u2014 to nie s\u0105 dane monitorowania. Pod withStorageLock,
 // \u017ceby \u017caden trwaj\u0105cy check nie nadpisa\u0142 czystego storage star\u0105 tablic\u0105.
 async function handleWipeAllData() {
-  return withStorageLock(async () => {
+  const outcome = await withStorageLock(async () => {
     const prefs = await chrome.storage.local.get(['language', 'theme', 'snapshotRetentionDays']);
     await chrome.alarms.clearAll();
     await chrome.storage.local.clear();
     if (prefs && Object.keys(prefs).length) await chrome.storage.local.set(prefs);
+    // Privacy-first: with no monitored pages the extension must not keep
+    // ACCESS to any page either. Single deletes release their origin
+    // (releaseUnusedOrigins), but this button used to leave every granted
+    // origin behind - user-reported recurring regression: access to removed
+    // pages persisted after the wipe. Best-effort: failures only warn.
+    try {
+      const all = await chrome.permissions.getAll();
+      const origins = (all && all.origins) || [];
+      if (origins.length) await chrome.permissions.remove({ origins });
+    } catch (e) {
+      console.warn('[Monitor] Could not release origins after wipe', e);
+    }
     // Bez stron: setupAlarms odtwarza tylko wizard_cleanup i zeruje badge.
     await setupAlarms();
     return { ok: true };
   });
+  return outcome;
 }
 
 async function checkSite(siteId) {
