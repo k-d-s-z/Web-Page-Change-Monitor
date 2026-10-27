@@ -280,3 +280,17 @@ test('statyczny straznik: fetchRenderedInner sprzata okno/karte w finally', () =
   assert.ok(tail.includes('chrome.tabs.remove('),
     'finally nie usuwa karty zapasowej (chrome.tabs.remove) — wyciek kart po bledach trybu renderowanego');
 });
+
+// Strażnik sprzątania uprawnień (regresja usera: „nie znika dostęp do stron
+// usuniętych z monitorowania" po „Usuń wszystkie dane"). Pojedyncze usunięcia
+// zwalniają swój origin (releaseUnusedOrigins), ale WIPE czyścił sam storage —
+// wszystkie przyznane originy zostawały w Chrome na zawsze. Strażnik wymaga,
+// żeby wipe odczytał przyznane uprawnienia (getAll) i je cofnął (remove).
+test('statyczny straznik: handleWipeAllData cofa przyznane originy', () => {
+  const decl = extractOne(backgroundSrc, 'handleWipeAllData');
+  assert.ok(decl, 'brak deklaracji handleWipeAllData w background.js');
+  assert.ok(decl.includes('chrome.permissions.getAll('),
+    'wipe nie odczytuje przyznanych uprawnien (chrome.permissions.getAll) — dostep do usunietych stron zostaje');
+  assert.ok(decl.includes('chrome.permissions.remove('),
+    'wipe nie cofa przyznanych originow (chrome.permissions.remove) — dostep do usunietych stron zostaje (regresja usera)');
+});
